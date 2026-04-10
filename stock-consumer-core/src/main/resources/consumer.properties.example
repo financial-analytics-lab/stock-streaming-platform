@@ -1,0 +1,11 @@
+# Stock Consumer Core - Example Configuration
+# Copy to consumer.properties on your classpath, or set STOCK_CONSUMER_* env vars.
+#
+# Env vars take precedence over this file.
+
+bootstrap.servers=localhost:9092
+group.id=my-group
+topic=stock-ticks
+poll.timeout.ms=1000
+auto.offset.reset=earliest
+max.poll.records=500

@@ -20,8 +20,5 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Run unit tests
-        run: mvn test -pl stock-consumer-core
-
-      - name: Run integration tests
-        run: mvn verify -pl stock-consumer-core -DskipTests
+      - name: Run unit and integration tests
+        run: mvn verify -pl stock-consumer-core

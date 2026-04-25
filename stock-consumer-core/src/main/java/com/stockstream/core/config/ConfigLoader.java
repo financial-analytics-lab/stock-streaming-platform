@@ -13,22 +13,56 @@ public final class ConfigLoader {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConfigLoader.class);
 
+    // Defaults applied when neither env var nor properties file provides a value.
+    static final String DEFAULT_TICK_TOPIC = "stock-ticks";
+    static final String DEFAULT_TICK_GROUP_ID = "dashboard-tick-consumer";
+    static final String DEFAULT_NEWS_TOPIC = "news-events";
+    static final String DEFAULT_NEWS_GROUP_ID = "dashboard-news-consumer";
+
     private ConfigLoader() {}
 
-    /**
-     * Load config from classpath resource "consumer.properties"
-     * merged with environment variables. Env vars win.
-     */
+    /** Load broker/poll settings. Topic and group are loaded separately, see loadXxxSubscription. */
     public static ConsumerConfig load() {
         return load("consumer.properties");
     }
 
     public static ConsumerConfig load(String resourceName) {
         Properties fileProps = loadFromClasspath(resourceName);
+        return buildConfig(fileProps);
+    }
 
+    /** Load the tick subscription (topic + group). */
+    public static Subscription loadTickSubscription() {
+        return loadTickSubscription("consumer.properties");
+    }
+
+    public static Subscription loadTickSubscription(String resourceName) {
+        Properties fileProps = loadFromClasspath(resourceName);
+        String topic = resolve(fileProps, "tick.topic", "STOCK_CONSUMER_TICK_TOPIC");
+        String groupId = resolve(fileProps, "tick.group.id", "STOCK_CONSUMER_TICK_GROUP_ID");
+        if (topic == null) topic = DEFAULT_TICK_TOPIC;
+        if (groupId == null) groupId = DEFAULT_TICK_GROUP_ID;
+        return new Subscription(topic, groupId);
+    }
+
+    /** Load the news subscription (topic + group). */
+    public static Subscription loadNewsSubscription() {
+        return loadNewsSubscription("consumer.properties");
+    }
+
+    public static Subscription loadNewsSubscription(String resourceName) {
+        Properties fileProps = loadFromClasspath(resourceName);
+        String topic = resolve(fileProps, "news.topic", "STOCK_CONSUMER_NEWS_TOPIC");
+        String groupId = resolve(fileProps, "news.group.id", "STOCK_CONSUMER_NEWS_GROUP_ID");
+        if (topic == null) topic = DEFAULT_NEWS_TOPIC;
+        if (groupId == null) groupId = DEFAULT_NEWS_GROUP_ID;
+        return new Subscription(topic, groupId);
+    }
+
+    // ---- internals ----
+
+    private static ConsumerConfig buildConfig(Properties fileProps) {
         String bootstrapServers = resolve(fileProps, "bootstrap.servers", "STOCK_CONSUMER_BOOTSTRAP_SERVERS");
-        String groupId = resolve(fileProps, "group.id", "STOCK_CONSUMER_GROUP_ID");
-        String topic = resolve(fileProps, "topic", "STOCK_CONSUMER_TOPIC");
         String pollTimeoutMs = resolve(fileProps, "poll.timeout.ms", "STOCK_CONSUMER_POLL_TIMEOUT_MS");
         String autoOffsetReset = resolve(fileProps, "auto.offset.reset", "STOCK_CONSUMER_AUTO_OFFSET_RESET");
         String maxPollRecords = resolve(fileProps, "max.poll.records", "STOCK_CONSUMER_MAX_POLL_RECORDS");
@@ -43,8 +77,6 @@ public final class ConfigLoader {
 
         return new ConsumerConfig(
                 bootstrapServers,
-                groupId,
-                topic,
                 pollTimeout,
                 false,
                 autoOffsetReset,

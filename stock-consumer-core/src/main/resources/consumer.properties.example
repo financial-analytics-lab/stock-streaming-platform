@@ -3,9 +3,18 @@
 #
 # Env vars take precedence over this file.
 
+# ---- Broker / poll settings (shared by all consumers in the JVM) ----
 bootstrap.servers=localhost:9092
-group.id=my-group
-topic=stock-ticks
 poll.timeout.ms=1000
 auto.offset.reset=earliest
 max.poll.records=500
+
+# ---- Tick consumer subscription ----
+# Env vars: STOCK_CONSUMER_TICK_TOPIC, STOCK_CONSUMER_TICK_GROUP_ID
+tick.topic=stock-ticks
+tick.group.id=dashboard-tick-consumer
+
+# ---- News consumer subscription ----
+# Env vars: STOCK_CONSUMER_NEWS_TOPIC, STOCK_CONSUMER_NEWS_GROUP_ID
+news.topic=news-events
+news.group.id=dashboard-news-consumer

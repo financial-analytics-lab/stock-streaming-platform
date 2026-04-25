@@ -4,22 +4,24 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.stockstream.core.exception.DeserializationException;
-import com.stockstream.core.model.Tick;
 
-public final class TickDeserializer {
+public final class MessageDeserializer<T> {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private final Class<T> clazz;
 
-    private TickDeserializer() {}
+    public MessageDeserializer(Class<T> clazz) {
+        this.clazz = clazz;
+    }
 
-    public static Tick deserialize(byte[] data) {
+    public T deserialize(byte[] data) {
         try {
-            return MAPPER.readValue(data, Tick.class);
+            return MAPPER.readValue(data, this.clazz);
         } catch (Exception e) {
             throw new DeserializationException(
-                    "Failed to deserialize tick from " + data.length + " bytes", e);
+                    "Failed to deserialize " + clazz.getSimpleName() + " from " + data.length + " bytes", e);
         }
     }
 }

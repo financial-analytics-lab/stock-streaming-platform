@@ -3,6 +3,7 @@ package com.stockstream.core.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.stockstream.core.config.ConsumerConfig;
+import com.stockstream.core.exception.DeserializationException;
 import com.stockstream.core.model.Tick;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -15,8 +16,6 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
-
-import com.stockstream.core.exception.DeserializationException;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +31,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
-class AbstractTickConsumerIT {
+class TickConsumerIT {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .registerModule(new JavaTimeModule());
@@ -48,9 +47,9 @@ class AbstractTickConsumerIT {
         return new KafkaProducer<>(props);
     }
 
-    private ConsumerConfig consumerConfig(String topic, String groupId) {
+    private ConsumerConfig consumerConfig() {
         return new ConsumerConfig(
-                KAFKA.getBootstrapServers(), groupId, topic,
+                KAFKA.getBootstrapServers(),
                 Duration.ofMillis(500), false, "earliest", 100, null);
     }
 
@@ -72,12 +71,7 @@ class AbstractTickConsumerIT {
             producer.flush();
         }
 
-        var consumer = new AbstractTickConsumer(consumerConfig(topic, "group-consume")) {
-            @Override
-            protected void process(Tick tick) {
-                received.add(tick);
-            }
-        };
+        var consumer = new TickConsumer(consumerConfig(), topic, "group-consume", received::add);
 
         Thread thread = new Thread(consumer::start);
         thread.start();
@@ -103,7 +97,8 @@ class AbstractTickConsumerIT {
             producer.flush();
         }
 
-        var consumer = new AbstractTickConsumer(consumerConfig(topic, "group-poison")) {
+        var consumer = new AbstractKafkaConsumer<Tick>(
+                consumerConfig(), topic, "group-poison", new MessageDeserializer<>(Tick.class)) {
             @Override
             protected void process(Tick tick) {
                 goodTicks.add(tick);
@@ -139,7 +134,8 @@ class AbstractTickConsumerIT {
             producer.flush();
         }
 
-        var consumer = new AbstractTickConsumer(consumerConfig(topic, "group-proc-err")) {
+        var consumer = new AbstractKafkaConsumer<Tick>(
+                consumerConfig(), topic, "group-proc-err", new MessageDeserializer<>(Tick.class)) {
             @Override
             protected void process(Tick tick) {
                 if ("FAIL".equals(tick.symbol())) {
@@ -173,7 +169,8 @@ class AbstractTickConsumerIT {
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch stopLatch = new CountDownLatch(1);
 
-        var consumer = new AbstractTickConsumer(consumerConfig(topic, "group-lifecycle")) {
+        var consumer = new AbstractKafkaConsumer<Tick>(
+                consumerConfig(), topic, "group-lifecycle", new MessageDeserializer<>(Tick.class)) {
             @Override
             protected void process(Tick tick) {}
 
@@ -201,10 +198,7 @@ class AbstractTickConsumerIT {
     void shutdownStopsConsumerGracefully() throws Exception {
         String topic = "test-shutdown-" + System.nanoTime();
 
-        var consumer = new AbstractTickConsumer(consumerConfig(topic, "group-shutdown")) {
-            @Override
-            protected void process(Tick tick) {}
-        };
+        var consumer = new TickConsumer(consumerConfig(), topic, "group-shutdown", t -> {});
 
         Thread thread = new Thread(consumer::start);
         thread.start();
@@ -223,10 +217,7 @@ class AbstractTickConsumerIT {
     void doubleStartThrows() throws Exception {
         String topic = "test-double-start-" + System.nanoTime();
 
-        var consumer = new AbstractTickConsumer(consumerConfig(topic, "group-double")) {
-            @Override
-            protected void process(Tick tick) {}
-        };
+        var consumer = new TickConsumer(consumerConfig(), topic, "group-double", t -> {});
 
         Thread thread = new Thread(consumer::start);
         thread.start();

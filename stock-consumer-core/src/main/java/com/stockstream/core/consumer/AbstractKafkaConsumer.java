@@ -3,32 +3,50 @@ package com.stockstream.core.consumer;
 import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.exception.DeserializationException;
 import com.stockstream.core.logging.LoggerFactory;
-import com.stockstream.core.model.Tick;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
 
 import java.util.Collections;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public abstract class AbstractTickConsumer implements AutoCloseable {
+/**
+ * Generic single-topic Kafka consumer. Subclasses bind a message type {@code T},
+ * pass a {@link MessageDeserializer} for that type, and implement {@link #process}.
+ *
+ * <p>One instance owns one {@link KafkaConsumer} and is not thread-safe — run each
+ * instance on its own thread.
+ */
+public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
     private final ConsumerConfig config;
+    private final String topic;
+    private final String groupId;
+    private final MessageDeserializer<T> deserializer;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private KafkaConsumer<String, byte[]> consumer;
 
-    protected AbstractTickConsumer(ConsumerConfig config) {
+    protected AbstractKafkaConsumer(ConsumerConfig config,
+                                    String topic,
+                                    String groupId,
+                                    MessageDeserializer<T> deserializer) {
+        if (config == null) throw new IllegalArgumentException("config is required");
+        if (topic == null || topic.isBlank()) throw new IllegalArgumentException("topic is required");
+        if (groupId == null || groupId.isBlank()) throw new IllegalArgumentException("groupId is required");
+        if (deserializer == null) throw new IllegalArgumentException("deserializer is required");
         this.config = config;
+        this.topic = topic;
+        this.groupId = groupId;
+        this.deserializer = deserializer;
     }
 
-
-    /** Process a single deserialized tick. Called once per record. */
-    protected abstract void process(Tick tick);
+    /** Process a single deserialized message. Called once per record. */
+    protected abstract void process(T message);
 
     /**
      * Called when a record fails deserialization.
@@ -40,24 +58,17 @@ public abstract class AbstractTickConsumer implements AutoCloseable {
     }
 
     /**
-     * Called when process(Tick) throws.
+     * Called when {@link #process} throws.
      * Default: log and skip. Override for retry logic, DLQ routing, etc.
      */
-    protected void onProcessingError(Tick tick, Exception e) {
-        log.log(Level.SEVERE, "Error processing tick " + tick.tickId() +
-                " [" + tick.symbol() + "]", e);
+    protected void onProcessingError(T message, Exception e) {
+        log.log(Level.SEVERE, "Error processing message: " + message, e);
     }
 
-    /**
-     * Called once before the poll loop starts, after subscription.
-     * Override for one-time setup (DB connections, etc.).
-     */
+    /** Called once before the poll loop starts, after subscription. */
     protected void onStart() {}
 
-    /**
-     * Called once after the poll loop exits, before consumer.close().
-     * Override for cleanup.
-     */
+    /** Called once after the poll loop exits, before consumer.close(). */
     protected void onStop() {}
 
     // ---- Lifecycle ----
@@ -68,9 +79,11 @@ public abstract class AbstractTickConsumer implements AutoCloseable {
             throw new IllegalStateException("Consumer is already running");
         }
 
-        consumer = new KafkaConsumer<>(config.toKafkaProperties());
-        consumer.subscribe(Collections.singletonList(config.topic()));
-        log.info("Subscribed to topic '" + config.topic() + "' with group '" + config.groupId() + "'");
+        Properties props = config.toKafkaProperties();
+        props.put(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumer = new KafkaConsumer<>(props);
+        consumer.subscribe(Collections.singletonList(topic));
+        log.info("Subscribed to topic '" + topic + "' with group '" + groupId + "'");
 
         onStart();
 
@@ -79,18 +92,18 @@ public abstract class AbstractTickConsumer implements AutoCloseable {
                 ConsumerRecords<String, byte[]> records = consumer.poll(config.pollTimeout());
 
                 for (ConsumerRecord<String, byte[]> record : records) {
-                    Tick tick;
+                    T message;
                     try {
-                        tick = TickDeserializer.deserialize(record.value());
+                        message = deserializer.deserialize(record.value());
                     } catch (DeserializationException e) {
                         onDeserializationError(record, e);
                         continue;
                     }
 
                     try {
-                        process(tick);
+                        process(message);
                     } catch (Exception e) {
-                        onProcessingError(tick, e);
+                        onProcessingError(message, e);
                     }
                 }
 
@@ -110,7 +123,7 @@ public abstract class AbstractTickConsumer implements AutoCloseable {
         }
     }
 
-    /** Trigger graceful shutdown. Safe to call from another thread (e.g., shutdown hook). */
+    /** Trigger graceful shutdown. Safe to call from another thread. */
     public final void shutdown() {
         log.info("Shutdown requested.");
         running.set(false);
@@ -119,7 +132,7 @@ public abstract class AbstractTickConsumer implements AutoCloseable {
         }
     }
 
-    /** For use in shutdown hooks. */
+    /** For use in JVM shutdown hooks. */
     public final Thread shutdownHook() {
         return new Thread(this::shutdown, "consumer-shutdown-hook");
     }

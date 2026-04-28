@@ -10,7 +10,9 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class TickDeserializerTest {
+class MessageDeserializerTest {
+
+    private final MessageDeserializer<Tick> tickDeserializer = new MessageDeserializer<>(Tick.class);
 
     @Test
     void deserializesValidJson() {
@@ -25,7 +27,7 @@ class TickDeserializerTest {
                 }
                 """;
 
-        Tick tick = TickDeserializer.deserialize(json.getBytes(StandardCharsets.UTF_8));
+        Tick tick = tickDeserializer.deserialize(json.getBytes(StandardCharsets.UTF_8));
 
         assertEquals(1L, tick.tickId());
         assertEquals("AAPL", tick.symbol());
@@ -40,13 +42,13 @@ class TickDeserializerTest {
         byte[] garbage = "not json".getBytes(StandardCharsets.UTF_8);
 
         assertThrows(DeserializationException.class, () ->
-                TickDeserializer.deserialize(garbage));
+                tickDeserializer.deserialize(garbage));
     }
 
     @Test
     void throwsOnEmptyBytes() {
         assertThrows(DeserializationException.class, () ->
-                TickDeserializer.deserialize(new byte[0]));
+                tickDeserializer.deserialize(new byte[0]));
     }
 
     @Test
@@ -62,7 +64,7 @@ class TickDeserializerTest {
                 """;
 
         assertThrows(DeserializationException.class, () ->
-                TickDeserializer.deserialize(json.getBytes(StandardCharsets.UTF_8)));
+                tickDeserializer.deserialize(json.getBytes(StandardCharsets.UTF_8)));
     }
 
     @Test
@@ -79,7 +81,7 @@ class TickDeserializerTest {
                 }
                 """;
 
-        Tick tick = TickDeserializer.deserialize(json.getBytes(StandardCharsets.UTF_8));
+        Tick tick = tickDeserializer.deserialize(json.getBytes(StandardCharsets.UTF_8));
         assertEquals("GOOG", tick.symbol());
     }
 }

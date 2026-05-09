@@ -3,6 +3,8 @@ package com.stockstream.core.consumer;
 import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.exception.DeserializationException;
 import com.stockstream.core.logging.LoggerFactory;
+import com.stockstream.core.metrics.ConsumerMetrics;
+import com.stockstream.core.metrics.MetricsRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -29,6 +31,7 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
     private final String groupId;
     private final MessageDeserializer<T> deserializer;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final ConsumerMetrics metrics;
     private KafkaConsumer<String, byte[]> consumer;
 
     protected AbstractKafkaConsumer(ConsumerConfig config,
@@ -43,6 +46,10 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
         this.topic = topic;
         this.groupId = groupId;
         this.deserializer = deserializer;
+
+        // Initialize metrics for this consumer
+        String consumerName = String.format("%s-%s", topic, groupId);
+        this.metrics = MetricsRegistry.getInstance().getOrCreateMetrics(consumerName);
     }
 
     /** Process a single deserialized message. Called once per record. */
@@ -92,6 +99,8 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
                 ConsumerRecords<String, byte[]> records = consumer.poll(config.pollTimeout());
 
                 for (ConsumerRecord<String, byte[]> record : records) {
+                    long recordStartTime = System.currentTimeMillis();
+
                     T message;
                     try {
                         message = deserializer.deserialize(record.value());
@@ -101,7 +110,17 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
                     }
 
                     try {
+                        // Calculate end-to-end latency (time from record timestamp to now)
+                        long endToEndLatency = System.currentTimeMillis() - record.timestamp();
+
+                        // Process the message and measure processing time
+                        long processStartTime = System.currentTimeMillis();
                         process(message);
+                        long processingTime = System.currentTimeMillis() - processStartTime;
+
+                        // Record metrics
+                        metrics.recordMessage(processingTime, endToEndLatency);
+
                     } catch (Exception e) {
                         onProcessingError(message, e);
                     }
@@ -144,5 +163,13 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
 
     public boolean isRunning() {
         return running.get();
+    }
+
+    public ConsumerMetrics getMetrics() {
+        return metrics;
+    }
+
+    public String getConsumerName() {
+        return metrics.getConsumerName();
     }
 }

@@ -5,6 +5,7 @@ import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.config.Subscription;
 import com.stockstream.core.consumer.NewsConsumer;
 import com.stockstream.core.consumer.TickConsumer;
+import com.stockstream.core.metrics.ConsumerMetrics;
 import com.stockstream.dashboard.store.NewsStore;
 import com.stockstream.dashboard.store.TickStore;
 import com.stockstream.dashboard.websocket.StockWebSocketHandler;
@@ -26,6 +27,8 @@ public class ConsumerService {
 
     private TickConsumer tickConsumer;
     private NewsConsumer newsConsumer;
+    private ConsumerMetrics tickMetrics;
+    private ConsumerMetrics newsMetrics;
 
     public ConsumerService(TickStore tickStore, NewsStore newsStore, StockWebSocketHandler wsHandler) {
         this.tickStore = tickStore;
@@ -51,6 +54,10 @@ public class ConsumerService {
             wsHandler.broadcast("news", event);
         });
 
+        // Get metrics instances
+        tickMetrics = tickConsumer.getMetrics();
+        newsMetrics = newsConsumer.getMetrics();
+
         executor.submit(tickConsumer::start);
         executor.submit(newsConsumer::start);
     }
@@ -65,5 +72,13 @@ public class ConsumerService {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    public ConsumerMetrics getTickMetrics() {
+        return tickMetrics;
+    }
+
+    public ConsumerMetrics getNewsMetrics() {
+        return newsMetrics;
     }
 }

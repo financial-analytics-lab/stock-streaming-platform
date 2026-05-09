@@ -21,7 +21,8 @@ public class DashboardApp {
 
     // TODO: push tick to WebSocket/SSE for frontend
     private static void printTick(Tick tick) {
-        System.out.printf("[%s] $%s | vol=%d | %s%n",
-                tick.symbol(), tick.price(), tick.volume(), tick.timestamp());
+        System.out.printf("[%s] $%s | vol=%d | %s%n | %s%n | %s%n | %s%n",
+                tick.symbol(), tick.price(), tick.volume(), tick.timestamp(),
+                tick.publishedAt(), tick.securityName(), tick.lagMs());
     }
 }

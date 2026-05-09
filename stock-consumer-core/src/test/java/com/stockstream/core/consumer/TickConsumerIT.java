@@ -54,8 +54,8 @@ class TickConsumerIT {
     }
 
     private byte[] tickJson(long id, String symbol, double price) throws Exception {
-        Tick tick = new Tick(id, symbol, BigDecimal.valueOf(price), 1000L,
-                Instant.parse("2026-01-15T10:30:00Z"), Instant.parse("2026-01-15T10:30:01Z"));
+        Tick tick = new Tick(id, "Name", symbol, BigDecimal.valueOf(price), 1000L,
+                Instant.parse("2026-01-15T10:30:00Z"), Instant.parse("2026-01-15T10:30:01Z"), 0);
         return MAPPER.writeValueAsBytes(tick);
     }
 

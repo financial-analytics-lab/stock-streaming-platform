@@ -7,11 +7,13 @@ import java.time.Instant;
 
 public record Tick(
         @JsonProperty("tick_id") long tickId,
+        @JsonProperty("security_name") String securityName,
         @JsonProperty("symbol") String symbol,
         @JsonProperty("price") BigDecimal price,
         @JsonProperty("volume") long volume,
         @JsonProperty("timestamp") Instant timestamp,
-        @JsonProperty("published_at") Instant publishedAt
+        @JsonProperty("published_at") Instant publishedAt,
+        @JsonProperty("lag_ms") long lagMs
 ) {
     public Tick {
         if (symbol == null || symbol.isBlank()) {

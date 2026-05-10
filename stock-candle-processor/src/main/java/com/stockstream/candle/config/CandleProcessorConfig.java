@@ -11,12 +11,14 @@ public record CandleProcessorConfig(
         String inputTopic,
         int numStreamThreads,
         String stateDir,
-        String autoOffsetReset
+        String autoOffsetReset,
+        long commitIntervalMs
 ) {
-    static final String DEFAULT_APP_ID     = "candle-processor";
-    static final String DEFAULT_INPUT      = "stock-ticks";
-    static final String DEFAULT_STATE_DIR  = "/tmp/kafka-streams/candle-processor";
-    static final int    DEFAULT_THREADS    = 2;
+    static final String DEFAULT_APP_ID        = "candle-processor";
+    static final String DEFAULT_INPUT         = "stock-ticks";
+    static final String DEFAULT_STATE_DIR     = "/tmp/kafka-streams/candle-processor";
+    static final int    DEFAULT_THREADS       = 2;
+    static final long   DEFAULT_COMMIT_MS     = 100L;
 
     public CandleProcessorConfig {
         if (bootstrapServers == null || bootstrapServers.isBlank())
@@ -31,6 +33,8 @@ public record CandleProcessorConfig(
             numStreamThreads = DEFAULT_THREADS;
         if (autoOffsetReset == null || autoOffsetReset.isBlank())
             autoOffsetReset = "earliest";
+        if (commitIntervalMs <= 0)
+            commitIntervalMs = DEFAULT_COMMIT_MS;
     }
 
     public Properties toStreamsProperties() {
@@ -45,6 +49,7 @@ public record CandleProcessorConfig(
         p.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                 LogAndContinueExceptionHandler.class.getName());
         p.put(org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
+        p.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
         return p;
     }
 }

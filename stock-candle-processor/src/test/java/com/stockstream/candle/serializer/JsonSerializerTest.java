@@ -1,6 +1,7 @@
 package com.stockstream.candle.serializer;
 
 import com.stockstream.candle.model.Candle;
+import com.stockstream.candle.model.CandleStatus;
 import com.stockstream.core.model.Tick;
 import org.apache.kafka.common.serialization.Serde;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,8 @@ class JsonSerializerTest {
                 new BigDecimal("415.00"), new BigDecimal("416.50"),
                 new BigDecimal("414.80"), new BigDecimal("416.00"),
                 25000L, 180L,
-                Instant.parse("2026-01-15T10:01:10Z")
+                Instant.parse("2026-01-15T10:01:10Z"),
+                CandleStatus.CLOSED
         );
 
         byte[] bytes = serde.serializer().serialize("topic", original);

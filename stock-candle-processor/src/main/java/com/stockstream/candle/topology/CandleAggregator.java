@@ -17,7 +17,7 @@ public final class CandleAggregator {
                 null, interval.label,
                 null, null,
                 null, null, null, null,
-                0L, 0L, null
+                0L, 0L, null, null  // status injected by topology
         );
     }
 
@@ -27,15 +27,16 @@ public final class CandleAggregator {
             return new Candle(
                     symbol,
                     interval.label,
-                    null,   // windowStart injected after suppress
-                    null,   // windowEnd injected after suppress
+                    null,   // windowStart injected by topology
+                    null,   // windowEnd injected by topology
                     first ? tick.price() : acc.open(),
                     first ? tick.price() : acc.high().max(tick.price()),
                     first ? tick.price() : acc.low().min(tick.price()),
                     tick.price(),   // close = last seen price
                     acc.volume() + tick.volume(),
                     acc.tickCount() + 1,
-                    Instant.now()
+                    Instant.now(),
+                    null    // status injected by topology
             );
         };
     }

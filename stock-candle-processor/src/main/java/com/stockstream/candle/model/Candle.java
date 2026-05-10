@@ -16,7 +16,8 @@ public record Candle(
         @JsonProperty("close")        BigDecimal close,
         @JsonProperty("volume")       long volume,
         @JsonProperty("tick_count")   long tickCount,
-        @JsonProperty("published_at") Instant publishedAt
+        @JsonProperty("published_at") Instant publishedAt,
+        @JsonProperty("status")       CandleStatus status
 ) {
     public Candle {
         if (symbol != null && symbol.isBlank())

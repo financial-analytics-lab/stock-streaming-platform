@@ -27,13 +27,17 @@ public final class CandleConfigLoader {
         String inputTopic      = resolve(file, "input.topic",        "CANDLE_INPUT_TOPIC");
         String stateDir        = resolve(file, "state.dir",          "CANDLE_STATE_DIR");
         String threadsStr      = resolve(file, "num.stream.threads", "CANDLE_NUM_STREAM_THREADS");
-        String autoOffsetReset = resolve(file, "auto.offset.reset",  "CANDLE_AUTO_OFFSET_RESET");
+        String autoOffsetReset  = resolve(file, "auto.offset.reset",   "CANDLE_AUTO_OFFSET_RESET");
+        String commitIntervalStr = resolve(file, "commit.interval.ms", "CANDLE_COMMIT_INTERVAL_MS");
 
         int threads = threadsStr != null
                 ? Integer.parseInt(threadsStr)
                 : CandleProcessorConfig.DEFAULT_THREADS;
+        long commitIntervalMs = commitIntervalStr != null
+                ? Long.parseLong(commitIntervalStr)
+                : CandleProcessorConfig.DEFAULT_COMMIT_MS;
 
-        return new CandleProcessorConfig(bootstrap, appId, inputTopic, threads, stateDir, autoOffsetReset);
+        return new CandleProcessorConfig(bootstrap, appId, inputTopic, threads, stateDir, autoOffsetReset, commitIntervalMs);
     }
 
     private static String resolve(Properties file, String key, String envKey) {

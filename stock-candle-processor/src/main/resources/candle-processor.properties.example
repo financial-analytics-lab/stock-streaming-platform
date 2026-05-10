@@ -1,0 +1,23 @@
+# Candle Processor Configuration
+# Copy this file to candle-processor.properties on the classpath.
+# Environment variables (CANDLE_* prefix) override file values.
+
+# Kafka broker address
+# Env: CANDLE_BOOTSTRAP_SERVERS
+bootstrap.servers=localhost:9092
+
+# Kafka Streams application ID — must be unique per deployment
+# Env: CANDLE_APPLICATION_ID
+application.id=candle-processor
+
+# Input topic containing raw stock ticks (key = symbol)
+# Env: CANDLE_INPUT_TOPIC
+input.topic=stock-ticks
+
+# Number of stream processing threads (default: 2)
+# Env: CANDLE_NUM_STREAM_THREADS
+num.stream.threads=2
+
+# Local directory for RocksDB state stores
+# Env: CANDLE_STATE_DIR
+state.dir=/tmp/kafka-streams/candle-processor

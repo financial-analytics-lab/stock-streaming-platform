@@ -3,8 +3,10 @@ package com.stockstream.dashboard.service;
 import com.stockstream.core.config.ConfigLoader;
 import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.config.Subscription;
+import com.stockstream.core.consumer.CandleConsumer;
 import com.stockstream.core.consumer.NewsConsumer;
 import com.stockstream.core.consumer.TickConsumer;
+import com.stockstream.dashboard.store.CandleStore;
 import com.stockstream.dashboard.store.NewsStore;
 import com.stockstream.dashboard.store.TickStore;
 import com.stockstream.dashboard.websocket.StockWebSocketHandler;
@@ -12,6 +14,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -21,15 +25,19 @@ public class ConsumerService {
 
     private final TickStore tickStore;
     private final NewsStore newsStore;
+    private final CandleStore candleStore;
     private final StockWebSocketHandler wsHandler;
-    private final ExecutorService executor = Executors.newFixedThreadPool(2);
+    private ExecutorService executor;
 
     private TickConsumer tickConsumer;
     private NewsConsumer newsConsumer;
+    private final List<CandleConsumer> candleConsumers = new ArrayList<>();
 
-    public ConsumerService(TickStore tickStore, NewsStore newsStore, StockWebSocketHandler wsHandler) {
+    public ConsumerService(TickStore tickStore, NewsStore newsStore,
+                           CandleStore candleStore, StockWebSocketHandler wsHandler) {
         this.tickStore = tickStore;
         this.newsStore = newsStore;
+        this.candleStore = candleStore;
         this.wsHandler = wsHandler;
     }
 
@@ -38,6 +46,9 @@ public class ConsumerService {
         ConsumerConfig config = ConfigLoader.load();
         Subscription tickSub = ConfigLoader.loadTickSubscription();
         Subscription newsSub = ConfigLoader.loadNewsSubscription();
+        List<Subscription> candleSubs = ConfigLoader.loadCandleSubscriptions();
+
+        executor = Executors.newFixedThreadPool(2 + candleSubs.size());
 
         tickConsumer = new TickConsumer(config, tickSub.topic(), tickSub.groupId(), tick -> {
             tickStore.add(tick);
@@ -51,19 +62,33 @@ public class ConsumerService {
             wsHandler.broadcast("news", event);
         });
 
+        for (Subscription sub : candleSubs) {
+            CandleConsumer cc = new CandleConsumer(config, sub.topic(), sub.groupId(), candle -> {
+                candleStore.add(candle);
+                wsHandler.broadcast("candle", candle);
+            });
+            candleConsumers.add(cc);
+        }
+
         executor.submit(tickConsumer::start);
         executor.submit(newsConsumer::start);
+        for (CandleConsumer cc : candleConsumers) {
+            executor.submit(cc::start);
+        }
     }
 
     @PreDestroy
     public void stop() {
         if (tickConsumer != null) tickConsumer.shutdown();
         if (newsConsumer != null) newsConsumer.shutdown();
-        executor.shutdown();
-        try {
-            executor.awaitTermination(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        for (CandleConsumer cc : candleConsumers) cc.shutdown();
+        if (executor != null) {
+            executor.shutdown();
+            try {
+                executor.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 }

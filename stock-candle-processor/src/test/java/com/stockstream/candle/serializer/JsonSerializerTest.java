@@ -1,7 +1,7 @@
 package com.stockstream.candle.serializer;
 
-import com.stockstream.candle.model.Candle;
-import com.stockstream.candle.model.CandleStatus;
+import com.stockstream.core.model.Candle;
+import com.stockstream.core.model.CandleStatus;
 import com.stockstream.core.model.Tick;
 import org.apache.kafka.common.serialization.Serde;
 import org.junit.jupiter.api.Test;
@@ -17,9 +17,10 @@ class JsonSerializerTest {
     @Test
     void tick_roundTrip() {
         Serde<Tick> serde = SerializerFactory.tickSerializer();
-        Tick original = new Tick(1L, "AAPL", new BigDecimal("182.50"), 1000L,
+        Tick original = new Tick(1L, "Apple Inc.", "AAPL", new BigDecimal("182.50"), 1000L,
                 Instant.parse("2026-01-15T10:00:00Z"),
-                Instant.parse("2026-01-15T10:00:00.100Z"));
+                Instant.parse("2026-01-15T10:00:00.100Z"),
+                100L);
 
         byte[] bytes = serde.serializer().serialize("topic", original);
         Tick restored = serde.deserializer().deserialize("topic", bytes);

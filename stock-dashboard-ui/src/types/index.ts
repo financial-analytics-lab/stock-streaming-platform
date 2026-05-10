@@ -31,7 +31,24 @@ export interface MetricsData {
   symbolCount: number
 }
 
+export type CandleStatus = 'OPEN' | 'CLOSED'
+
+export interface Candle {
+  symbol: string
+  interval: string
+  window_start: string   // ISO 8601
+  window_end: string     // ISO 8601
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  tick_count: number
+  published_at: string
+  status: CandleStatus
+}
+
 export interface WsMessage {
-  type: 'tick' | 'news'
-  data: Tick | NewsEvent
+  type: 'tick' | 'news' | 'candle'
+  data: Tick | NewsEvent | Candle
 }

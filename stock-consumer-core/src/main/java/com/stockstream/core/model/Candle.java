@@ -1,4 +1,4 @@
-package com.stockstream.candle.model;
+package com.stockstream.core.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

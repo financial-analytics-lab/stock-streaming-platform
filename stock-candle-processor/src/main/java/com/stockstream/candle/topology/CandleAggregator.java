@@ -1,7 +1,7 @@
 package com.stockstream.candle.topology;
 
-import com.stockstream.candle.model.Candle;
 import com.stockstream.candle.model.CandleInterval;
+import com.stockstream.core.model.Candle;
 import com.stockstream.core.model.Tick;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;

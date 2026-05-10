@@ -17,10 +17,10 @@ import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.WindowStore;
 
-import com.stockstream.candle.model.Candle;
 import com.stockstream.candle.model.CandleInterval;
-import com.stockstream.candle.model.CandleStatus;
 import com.stockstream.candle.serializer.SerializerFactory;
+import com.stockstream.core.model.Candle;
+import com.stockstream.core.model.CandleStatus;
 import com.stockstream.core.model.Tick;
 
 public final class CandleTopologyBuilder {
@@ -42,10 +42,10 @@ public final class CandleTopologyBuilder {
                         .withTimestampExtractor(new TickTimestampExtractor())
         );
 
- /*        ticks.peek((key, tick) -> LOG.info("[TICK] symbol=" + key
+        ticks.peek((key, tick) -> LOG.info("[TICK] symbol=" + key
                 + " price=" + (tick == null ? "NULL" : tick.price())
                 + " ts=" + (tick == null ? "?" : tick.timestamp())));
- */
+
         for (CandleInterval interval : CandleInterval.values()) {
             addBranch(ticks, interval);
         }

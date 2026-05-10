@@ -1,9 +1,9 @@
 package com.stockstream.candle.topology;
 
-import com.stockstream.candle.model.Candle;
 import com.stockstream.candle.model.CandleInterval;
-import com.stockstream.candle.model.CandleStatus;
 import com.stockstream.candle.serializer.SerializerFactory;
+import com.stockstream.core.model.Candle;
+import com.stockstream.core.model.CandleStatus;
 import com.stockstream.core.model.Tick;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
@@ -237,7 +237,7 @@ class CandleTopologyTest {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private void pipe(String symbol, long id, String price, long volume, Instant eventTime) {
-        Tick t = new Tick(id, symbol, new BigDecimal(price), volume, eventTime, eventTime);
+        Tick t = new Tick(id, symbol, symbol, new BigDecimal(price), volume, eventTime, eventTime, 0L);
         inputTopic.pipeInput(symbol, t, eventTime.toEpochMilli());
     }
 

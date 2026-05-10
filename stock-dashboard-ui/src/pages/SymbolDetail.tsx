@@ -1,10 +1,18 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, TrendingUp, TrendingDown, Clock, Zap } from 'lucide-react'
 import { useMarketStore } from '../store/useMarketStore'
 import { PriceChart } from '../components/PriceChart'
+import { CandleChart } from '../components/CandleChart'
+import { IntervalSelector } from '../components/IntervalSelector'
 import { NewsItem } from '../components/NewsItem'
 import { api } from '../lib/api'
+import type { Candle } from '../types'
+
+type ChartType = 'line' | 'candle'
+
+const FALLBACK_INTERVALS = ['1s', '5s', '1m', '5m', '15m']
+const EMPTY_CANDLES: Candle[] = []
 
 export function SymbolDetail() {
   const { symbol } = useParams<{ symbol: string }>()
@@ -14,12 +22,42 @@ export function SymbolDetail() {
   const history = useMarketStore((s) => (symbol ? (s.historyBySymbol[symbol] ?? []) : []))
   const news = useMarketStore((s) => s.news)
   const setHistory = useMarketStore((s) => s.setHistory)
+  const seedCandles = useMarketStore((s) => s.seedCandles)
+
+  const [chartType, setChartType] = useState<ChartType>('line')
+  const [intervals, setIntervals] = useState<string[]>(FALLBACK_INTERVALS)
+  const [candleInterval, setCandleInterval] = useState<string>('1m')
+
+  const candleHistoryMap = useMarketStore((s) => s.candleHistory)
+  const liveCandleMap = useMarketStore((s) => s.liveCandle)
+  const candleHistory = symbol
+    ? (candleHistoryMap[symbol]?.[candleInterval] ?? EMPTY_CANDLES)
+    : EMPTY_CANDLES
+  const liveCandle = symbol ? (liveCandleMap[symbol]?.[candleInterval] ?? null) : null
 
   useEffect(() => {
     if (symbol) {
       api.getHistory(symbol, 200).then((h) => setHistory(symbol, h)).catch(() => {})
     }
   }, [symbol, setHistory])
+
+  useEffect(() => {
+    api.getCandleIntervals()
+      .then((list) => {
+        if (list.length > 0) {
+          setIntervals(list)
+          setCandleInterval((current) => (list.includes(current) ? current : list[0]))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!symbol || chartType !== 'candle') return
+    api.getCandles(symbol, candleInterval, 200)
+      .then((res) => seedCandles(symbol, candleInterval, res.history, res.live))
+      .catch(() => {})
+  }, [symbol, candleInterval, chartType, seedCandles])
 
   if (!symbol || !latest) {
     return (
@@ -52,6 +90,8 @@ export function SymbolDetail() {
     { label: 'Avg Lag', value: `${avgLag.toFixed(1)} ms`, icon: Zap, color: avgLag > 1000 ? 'text-negative' : 'text-positive' },
   ]
 
+  const candleEmpty = candleHistory.length === 0 && !liveCandle
+
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
@@ -76,14 +116,48 @@ export function SymbolDetail() {
         </div>
       </div>
 
+      {/* Chart controls */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="inline-flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+          {(['line', 'candle'] as ChartType[]).map((t) => {
+            const active = t === chartType
+            return (
+              <button
+                key={t}
+                onClick={() => setChartType(t)}
+                className={
+                  'px-3 py-1 text-xs font-semibold rounded-md transition-colors capitalize ' +
+                  (active
+                    ? 'bg-positive/20 text-positive'
+                    : 'text-muted hover:text-text-primary hover:bg-border/60')
+                }
+              >
+                {t}
+              </button>
+            )
+          })}
+        </div>
+        {chartType === 'candle' && (
+          <IntervalSelector intervals={intervals} value={candleInterval} onChange={setCandleInterval} />
+        )}
+      </div>
+
       {/* Chart */}
       <div className="bg-card border border-border rounded-xl p-4">
-        {history.length === 0 ? (
+        {chartType === 'line' ? (
+          history.length === 0 ? (
+            <div className="h-[340px] flex items-center justify-center text-muted text-sm">
+              Loading chart data…
+            </div>
+          ) : (
+            <PriceChart history={history} />
+          )
+        ) : candleEmpty ? (
           <div className="h-[340px] flex items-center justify-center text-muted text-sm">
-            Loading chart data…
+            Waiting for {candleInterval} candles…
           </div>
         ) : (
-          <PriceChart history={history} />
+          <CandleChart history={candleHistory} live={liveCandle} />
         )}
       </div>
 

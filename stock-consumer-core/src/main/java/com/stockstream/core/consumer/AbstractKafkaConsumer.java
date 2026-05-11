@@ -72,6 +72,14 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
         log.log(Level.SEVERE, "Error processing message: " + message, e);
     }
 
+    /**
+     * Override to supply the timestamp from the actual message payload for latency metric tracking.
+     * Defaults to the Kafka Record timestamp.
+     */
+    protected long getEventTimestamp(T message, ConsumerRecord<String, byte[]> record) {
+        return record.timestamp();
+    }
+
     /** Called once before the poll loop starts, after subscription. */
     protected void onStart() {}
 
@@ -111,7 +119,8 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
 
                     try {
                         // Calculate end-to-end latency (time from record timestamp to now)
-                        long endToEndLatency = System.currentTimeMillis() - record.timestamp();
+                        long eventTimestamp = getEventTimestamp(message, record);
+                        long endToEndLatency = System.currentTimeMillis() - eventTimestamp;
 
                         // Process the message and measure processing time
                         long processStartTime = System.currentTimeMillis();

@@ -23,6 +23,7 @@ public class ConsumerService {
     private final TickStore tickStore;
     private final NewsStore newsStore;
     private final StockWebSocketHandler wsHandler;
+    private final CsvMetricsWriter csvWriter;
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
 
     private TickConsumer tickConsumer;
@@ -30,10 +31,11 @@ public class ConsumerService {
     private ConsumerMetrics tickMetrics;
     private ConsumerMetrics newsMetrics;
 
-    public ConsumerService(TickStore tickStore, NewsStore newsStore, StockWebSocketHandler wsHandler) {
+    public ConsumerService(TickStore tickStore, NewsStore newsStore, StockWebSocketHandler wsHandler, CsvMetricsWriter csvWriter) {
         this.tickStore = tickStore;
         this.newsStore = newsStore;
         this.wsHandler = wsHandler;
+        this.csvWriter = csvWriter;
     }
 
     @PostConstruct
@@ -44,6 +46,7 @@ public class ConsumerService {
 
         tickConsumer = new TickConsumer(config, tickSub.topic(), tickSub.groupId(), tick -> {
             tickStore.add(tick);
+            csvWriter.writeTickMetrics(tick, System.currentTimeMillis());
             wsHandler.broadcast("tick", tick);
             System.out.printf("[TICK] %s | price=%.2f | vol=%d | lag=%dms%n",
               tick.securityName(), tick.price(), tick.volume(), tick.lagMs());

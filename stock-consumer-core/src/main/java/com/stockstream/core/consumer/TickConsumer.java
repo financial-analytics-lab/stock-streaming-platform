@@ -23,4 +23,12 @@ public final class TickConsumer extends AbstractKafkaConsumer<Tick> {
     protected void process(Tick tick) {
         handler.accept(tick);
     }
+
+    @Override
+    protected long getEventTimestamp(Tick message, org.apache.kafka.clients.consumer.ConsumerRecord<String, byte[]> record) {
+        if (message.publishedAt() != null) {
+            return message.publishedAt().toEpochMilli();
+        }
+        return super.getEventTimestamp(message, record);
+    }
 }

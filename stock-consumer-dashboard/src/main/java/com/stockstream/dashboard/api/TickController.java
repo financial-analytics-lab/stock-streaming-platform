@@ -33,7 +33,7 @@ public class TickController {
         return tickStore.getHistory(symbol, Math.min(limit, 500));
     }
 
-    @GetMapping("/metrics")
+    @GetMapping("/ticks/metrics")
     public Map<String, Object> getMetrics() {
         return Map.of(
                 "totalReceived", tickStore.getTotalReceived(),

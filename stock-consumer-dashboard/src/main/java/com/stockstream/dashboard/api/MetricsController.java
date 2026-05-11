@@ -1,5 +1,6 @@
 package com.stockstream.dashboard.api;
 
+import com.stockstream.core.metrics.ConsumerMetrics;
 import com.stockstream.core.metrics.MetricsSnapshot;
 import com.stockstream.core.metrics.MetricsRegistry;
 import org.springframework.http.ResponseEntity;
@@ -25,10 +26,11 @@ public class MetricsController {
 
     @GetMapping("/{consumerName}")
     public ResponseEntity<MetricsSnapshot> getMetrics(@PathVariable String consumerName) {
-        MetricsSnapshot snapshot = metricsRegistry.getMetrics(consumerName);
-        if (snapshot == null) {
+        ConsumerMetrics metrics = metricsRegistry.getMetrics(consumerName);
+        if (metrics == null) {
             return ResponseEntity.notFound().build();
         }
+        MetricsSnapshot snapshot = metrics.getSnapshot();
         return ResponseEntity.ok(snapshot);
     }
 

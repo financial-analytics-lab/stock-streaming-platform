@@ -42,15 +42,20 @@ public class ValidationController {
     public ResponseEntity<Map<String, Object>> getValidationSummary(@PathVariable String symbol) {
         ValidationResult result = tickStore.validateSymbol(symbol);
 
-        var summary = Map.of(
-            "symbol", symbol,
-            "isComplete", result.isComplete(),
-            "completenessPercentage", result.completenessPercentage(),
-            "expectedCount", result.expectedCount(),
-            "actualCount", result.actualCount(),
-            "missingCount", result.missingCount(),
-            "gapCount", result.gaps().size(),
-            "validationTime", result.validationTime()
+        if (result == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Explicitly define the Map type to prevent intersection type inference errors
+        Map<String, Object> summary = Map.<String, Object>of(
+                "symbol", symbol,
+                "isComplete", result.isComplete(),
+                "completenessPercentage", result.completenessPercentage(),
+                "expectedCount", result.expectedCount(),
+                "actualCount", result.actualCount(),
+                "missingCount", result.missingCount(),
+                "gapCount", result.gaps().size(),
+                "validationTime", result.validationTime()
         );
 
         return ResponseEntity.ok(summary);
@@ -84,13 +89,14 @@ public class ValidationController {
 
         boolean isHealthy = avgCompleteness > 99.0; // 99% threshold
 
-        var health = Map.of(
-            "isHealthy", isHealthy,
-            "totalSymbols", totalSymbols,
-            "completeSymbols", completeSymbols,
-            "incompleteSymbols", totalSymbols - completeSymbols,
-            "averageCompleteness", avgCompleteness,
-            "timestamp", System.currentTimeMillis()
+        // Explicitly define the Map type
+        Map<String, Object> health = Map.<String, Object>of(
+                "isHealthy", isHealthy,
+                "totalSymbols", totalSymbols,
+                "completeSymbols", completeSymbols,
+                "incompleteSymbols", totalSymbols - completeSymbols,
+                "averageCompleteness", avgCompleteness,
+                "timestamp", System.currentTimeMillis()
         );
 
         return ResponseEntity.ok(health);

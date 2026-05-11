@@ -39,7 +39,7 @@ public final class TimeUtils {
         long eventTimeMillis = eventTime.toEpochMilli();
         log.info("Computing replay due time - Horizon: {}, Session Anchor: {}, Event Time: {}",
                 horizonStart, sessionAnchor, eventTime);
-        long dueTimeMillis = eventTimeMillis + (sessionAnchorMillis - horizonMillis);
+        long dueTimeMillis = horizonMillis + (eventTimeMillis - sessionAnchorMillis);
         return Instant.ofEpochMilli(dueTimeMillis);
     }
 }

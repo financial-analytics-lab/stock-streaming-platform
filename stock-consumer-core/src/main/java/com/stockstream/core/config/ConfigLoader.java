@@ -6,6 +6,9 @@ import com.stockstream.core.logging.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import java.util.logging.Logger;
 
@@ -18,6 +21,9 @@ public final class ConfigLoader {
     static final String DEFAULT_TICK_GROUP_ID = "dashboard-tick-consumer";
     static final String DEFAULT_NEWS_TOPIC = "news-events";
     static final String DEFAULT_NEWS_GROUP_ID = "dashboard-news-consumer";
+    static final List<String> DEFAULT_CANDLE_INTERVALS = List.of("1s", "5s", "1m", "5m", "15m");
+    static final String DEFAULT_CANDLE_TOPIC_PREFIX = "candles-";
+    static final String DEFAULT_CANDLE_GROUP_ID = "dashboard-candle-consumer";
 
     private ConfigLoader() {}
 
@@ -57,6 +63,43 @@ public final class ConfigLoader {
         if (topic == null) topic = DEFAULT_NEWS_TOPIC;
         if (groupId == null) groupId = DEFAULT_NEWS_GROUP_ID;
         return new Subscription(topic, groupId);
+    }
+
+    /** Load the configured candle intervals (e.g. ["1s","5s","1m","5m","15m"]). */
+    public static List<String> loadCandleIntervals() {
+        return loadCandleIntervals("consumer.properties");
+    }
+
+    public static List<String> loadCandleIntervals(String resourceName) {
+        Properties fileProps = loadFromClasspath(resourceName);
+        String raw = resolve(fileProps, "candle.intervals", "STOCK_CONSUMER_CANDLE_INTERVALS");
+        if (raw == null) return DEFAULT_CANDLE_INTERVALS;
+        List<String> intervals = new ArrayList<>();
+        for (String token : Arrays.asList(raw.split(","))) {
+            String trimmed = token.trim();
+            if (!trimmed.isEmpty()) intervals.add(trimmed);
+        }
+        return intervals.isEmpty() ? DEFAULT_CANDLE_INTERVALS : intervals;
+    }
+
+    /** Load one candle subscription per configured interval. Topic = prefix + interval. */
+    public static List<Subscription> loadCandleSubscriptions() {
+        return loadCandleSubscriptions("consumer.properties");
+    }
+
+    public static List<Subscription> loadCandleSubscriptions(String resourceName) {
+        Properties fileProps = loadFromClasspath(resourceName);
+        String prefix = resolve(fileProps, "candle.topic.prefix", "STOCK_CONSUMER_CANDLE_TOPIC_PREFIX");
+        String groupId = resolve(fileProps, "candle.group.id", "STOCK_CONSUMER_CANDLE_GROUP_ID");
+        if (prefix == null) prefix = DEFAULT_CANDLE_TOPIC_PREFIX;
+        if (groupId == null) groupId = DEFAULT_CANDLE_GROUP_ID;
+
+        List<Subscription> subs = new ArrayList<>();
+        for (String interval : loadCandleIntervals(resourceName)) {
+            // Per-interval group suffix so partitions are not shared across consumers.
+            subs.add(new Subscription(prefix + interval, groupId + "-" + interval));
+        }
+        return subs;
     }
 
     // ---- internals ----

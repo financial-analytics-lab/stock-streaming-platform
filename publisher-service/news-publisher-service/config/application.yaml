@@ -1,0 +1,21 @@
+replay:
+  horizon_start: "2025-01-02T09:59:30Z"
+  single_date: ""
+
+news:
+  file_path: "../publisher-service/all_news_by_date.json"
+
+kafka:
+  bootstrap_servers: "viaduct.proxy.rlwy.net:18942"
+  topic_prefix: "stock-news"
+  linger_ms: 5
+  batch_size: 16384
+  acks: 1
+  max_in_flight: 100
+  partitions: 32
+
+scheduler:
+  thread_pool_size: 8
+  dispatch_interval_ms: 10
+  lag_threshold_warn_ms: 1000
+  lag_threshold_fail_ms: 4000

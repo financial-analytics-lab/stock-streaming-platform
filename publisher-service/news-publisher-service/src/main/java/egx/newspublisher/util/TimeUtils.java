@@ -11,8 +11,11 @@ import org.slf4j.LoggerFactory;
 public final class TimeUtils {
     private static final Logger log = LoggerFactory.getLogger(TimeUtils.class);
 
-    private static final DateTimeFormatter NEWS_TIME_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC);
+        // Many news timestamps are provided in a local source timezone (e.g. UTC+12).
+        // Interpret incoming news datetime strings using the source offset so Instants are correct.
+        private static final int NEWS_SOURCE_OFFSET_HOURS = 12;
+        private static final DateTimeFormatter NEWS_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private TimeUtils() {
     }
@@ -23,7 +26,9 @@ public final class TimeUtils {
         }
 
         try {
-            return Instant.from(NEWS_TIME_FORMATTER.parse(dateTimeString.trim()));
+            // Parse as local date-time in the source timezone, then convert to Instant
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(dateTimeString.trim(), NEWS_TIME_FORMATTER);
+            return ldt.toInstant(ZoneOffset.ofHours(NEWS_SOURCE_OFFSET_HOURS));
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("Invalid news datetime format: " + dateTimeString, e);
         }
@@ -37,9 +42,7 @@ public final class TimeUtils {
         long horizonMillis = horizonStart.toEpochMilli();
         long sessionAnchorMillis = sessionAnchor.toEpochMilli();
         long eventTimeMillis = eventTime.toEpochMilli();
-        log.info("Computing replay due time - Horizon: {}, Session Anchor: {}, Event Time: {}",
-                horizonStart, sessionAnchor, eventTime);
-        long dueTimeMillis = horizonMillis + (eventTimeMillis - sessionAnchorMillis);
-        return Instant.ofEpochMilli(dueTimeMillis);
+        long dueTimeMillis = eventTimeMillis + (horizonMillis - sessionAnchorMillis);
+            return Instant.ofEpochMilli(dueTimeMillis);
     }
 }

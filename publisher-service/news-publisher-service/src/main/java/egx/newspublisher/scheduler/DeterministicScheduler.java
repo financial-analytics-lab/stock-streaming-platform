@@ -7,6 +7,7 @@ import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,9 +54,10 @@ public class DeterministicScheduler<T extends ReplayableEvent<?> & Comparable<T>
             if (nextEvent == null) {
                 break;
             }
-            log.info("Next event: {}", nextEvent);
             Instant dueTime = nextEvent.getReplayDueTime();
             Instant now = replayStart.plus(Duration.between(realStart, Instant.now()));
+            log.info("Next event due at {}, current replay time is {}, real time is {}",
+                    dueTime, now, Instant.now());
             long waitMillis = dueTime.toEpochMilli() - now.toEpochMilli();
 
             if (waitMillis > 0) {

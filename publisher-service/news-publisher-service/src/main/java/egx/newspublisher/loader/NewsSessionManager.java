@@ -83,7 +83,7 @@ public class NewsSessionManager {
                     rawArticles.add(node);
                 }
 
-                Instant sessionAnchor = findSessionAnchor(rawArticles);
+                Instant sessionAnchor = findSessionAnchor(sessionDate, rawArticles);
                 if (sessionAnchor == null) {
                     log.warn("Skipping news date {} because no valid datetime values were found", sessionDate);
                     continue;
@@ -95,6 +95,7 @@ public class NewsSessionManager {
                         Instant eventTime = resolveEventTime(event);
                         Instant replayDueTime = TimeUtils.computeReplayDueTime(horizonStart, sessionAnchor, eventTime);
                         event.setReplayDueTime(replayDueTime);
+                        log.info("Loaded news event: {}", event);
                         allEvents.add(event);
                     } catch (Exception e) {
                         log.warn("Failed to map news article for date {}: {}", sessionDate, e.getMessage());
@@ -111,17 +112,42 @@ public class NewsSessionManager {
         }
     }
 
-    private Instant findSessionAnchor(List<JsonNode> rawArticles) {
+    private Instant findSessionAnchor(String sessionDate, List<JsonNode> rawArticles) {
+        // Prefer the session's calendar date at 10:00:00 UTC as the anchor
+        try {
+            Instant anchor = LocalDate.parse(sessionDate, SESSION_DATE_FORMATTER)
+                    .atStartOfDay(ZoneOffset.UTC)
+                    .plusHours(10)
+                    .toInstant();
+            return anchor;
+        } catch (Exception e) {
+            log.debug("Failed to parse session date {} as a LocalDate, falling back to event-derived anchor: {}", sessionDate, e.getMessage());
+        }
+
+        // Fallback: find the earliest event datetime (supports datetime or date+time fields)
         Instant sessionAnchor = null;
         for (JsonNode node : rawArticles) {
             try {
                 String datetime = node.path("datetime").asText(null);
-                Instant eventTime = TimeUtils.parseNewsDateTime(datetime);
+                Instant eventTime = null;
+                if (datetime != null && !datetime.isBlank()) {
+                    eventTime = TimeUtils.parseNewsDateTime(datetime);
+                } else {
+                    String date = node.path("date").asText(null);
+                    String time = node.path("time").asText(null);
+                    if (date != null && time != null && !date.isBlank() && !time.isBlank()) {
+                        eventTime = TimeUtils.parseNewsDateTime(date + " " + time);
+                    } else {
+                        // no usable datetime on this node
+                        continue;
+                    }
+                }
+
                 if (sessionAnchor == null || eventTime.isBefore(sessionAnchor)) {
                     sessionAnchor = eventTime;
                 }
-            } catch (Exception e) {
-                log.debug("Skipping malformed datetime while finding session anchor: {}", e.getMessage());
+            } catch (Exception ex) {
+                log.debug("Skipping malformed datetime while finding session anchor: {}", ex.getMessage());
             }
         }
         return sessionAnchor;

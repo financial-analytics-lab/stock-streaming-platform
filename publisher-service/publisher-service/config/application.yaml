@@ -1,0 +1,25 @@
+replay:
+  horizon_start: "2025-01-02T10:00:00Z"
+  artifact_path: "/home/abdallah/Desktop/Grad Project/grad-spark/pub-sub-spark/data/shards_csv/"
+  scale_policy: "session_rebase"
+  single_session_date: "20250102"
+kafka:
+  #bootstrap_servers: "localhost:9092"
+  bootstrap_servers: "viaduct.proxy.rlwy.net:18942"
+  topic_prefix: "stock-ticks"
+  linger_ms: 5
+  batch_size: 16384
+  acks: 1
+  max_in_flight: 100
+  partitions: 32   # Kafka partitions
+scheduler:
+  thread_pool_size: 8
+  dispatch_interval_ms: 10
+  lag_threshold_warn_ms: 1000
+  lag_threshold_fail_ms: 4000
+
+symbols:
+  mapping_file: "./data/security_mapping.json"
+
+metrics:
+  output_dir: "./metrics_output"

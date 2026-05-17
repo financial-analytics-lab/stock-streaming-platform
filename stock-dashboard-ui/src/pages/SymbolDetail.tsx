@@ -7,7 +7,7 @@ import { CandleChart } from '../components/CandleChart'
 import { IntervalSelector } from '../components/IntervalSelector'
 import { NewsItem } from '../components/NewsItem'
 import { api } from '../lib/api'
-import type { Candle } from '../types'
+import type { Article, Candle } from '../types'
 
 type ChartType = 'line' | 'candle'
 
@@ -20,7 +20,7 @@ export function SymbolDetail() {
 
   const latest = useMarketStore((s) => (symbol ? s.latestBySymbol[symbol] : undefined))
   const history = useMarketStore((s) => (symbol ? (s.historyBySymbol[symbol] ?? []) : []))
-  const news = useMarketStore((s) => s.news)
+  const [news, setNews] = useState<Article[]>([])
   const setHistory = useMarketStore((s) => s.setHistory)
   const seedCandles = useMarketStore((s) => s.seedCandles)
 
@@ -38,6 +38,12 @@ export function SymbolDetail() {
   useEffect(() => {
     if (symbol) {
       api.getHistory(symbol, 200).then((h) => setHistory(symbol, h)).catch(() => {})
+      api.getNews()
+        .then((resp) => {
+          const group = resp.groups.find((g) => g.symbol === symbol.toUpperCase())
+          setNews(group?.articles ?? [])
+        })
+        .catch(() => setNews([]))
     }
   }, [symbol, setHistory])
 
@@ -182,10 +188,10 @@ export function SymbolDetail() {
         <div className="space-y-3">
           {news.length === 0 ? (
             <div className="text-muted text-sm bg-card border border-border rounded-xl p-4">
-              No news events received yet.
+              No news available for {symbol} up to the current simulation timestamp.
             </div>
           ) : (
-            news.slice(0, 5).map((n) => <NewsItem key={n.id} event={n} />)
+            news.slice(0, 5).map((n) => <NewsItem key={n.id} article={n} />)
           )}
         </div>
       </div>

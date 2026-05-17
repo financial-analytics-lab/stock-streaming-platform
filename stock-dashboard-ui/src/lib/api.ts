@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Tick, NewsEvent, MetricsData, Candle } from '../types'
+import type { Tick, Article, NewsResponse, MetricsData, Candle } from '../types'
 
 const client = axios.create({ baseURL: '/api' })
 
@@ -15,8 +15,11 @@ export const api = {
   getHistory: (symbol: string, limit = 200) =>
     client.get<Tick[]>(`/ticks/${symbol}/history`, { params: { limit } }).then((r) => r.data),
 
-  getNews: (limit = 50) =>
-    client.get<NewsEvent[]>('/news', { params: { limit } }).then((r) => r.data),
+  getNews: () =>
+    client.get<NewsResponse>('/news').then((r) => r.data),
+
+  getArticle: (id: string) =>
+    client.get<Article>(`/news/${encodeURIComponent(id)}`).then((r) => r.data),
 
   getMetrics: () =>
     client.get<MetricsData>('/metrics').then((r) => r.data),

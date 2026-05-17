@@ -9,20 +9,29 @@ export interface Tick {
   lag_ms: number
 }
 
-export interface NewsEvent {
+export interface Article {
   id: string
-  datetime: string       // ISO 8601
-  title: string
-  body: string
-  teaser: string
-  section: string
+  symbol: string
   source: string
-  categories: string[]
-  country: string
-  reads: number
+  publishedAt: string    // ISO 8601
+  title: string
+  teaser: string
+  body?: string
   url: string
-  image_url: string
-  date_raw: string
+  imageUrl: string
+  section: string
+  raw?: Record<string, unknown>
+}
+
+export interface NewsGroup {
+  symbol: string
+  company: string
+  articles: Article[]
+}
+
+export interface NewsResponse {
+  asOf: string           // ISO 8601
+  groups: NewsGroup[]
 }
 
 export interface MetricsData {
@@ -49,6 +58,6 @@ export interface Candle {
 }
 
 export interface WsMessage {
-  type: 'tick' | 'news' | 'candle'
-  data: Tick | NewsEvent | Candle
+  type: 'tick' | 'candle'
+  data: Tick | Candle
 }

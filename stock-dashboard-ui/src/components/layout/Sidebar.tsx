@@ -3,7 +3,7 @@ import { BarChart2, Newspaper, Activity, TrendingUp } from 'lucide-react'
 
 const links = [
   { to: '/', icon: BarChart2, label: 'Overview' },
-  { to: '/news', icon: Newspaper, label: 'News Feed' },
+  { to: '/news', icon: Newspaper, label: 'News' },
   { to: '/metrics', icon: Activity, label: 'System Metrics' },
 ]
 

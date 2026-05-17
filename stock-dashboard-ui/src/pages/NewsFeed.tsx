@@ -1,73 +1,109 @@
 import { useEffect, useState } from 'react'
-import { useMarketStore } from '../store/useMarketStore'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { NewsItem } from '../components/NewsItem'
 import { api } from '../lib/api'
+import type { NewsResponse } from '../types'
 
 export function NewsFeed() {
-  const news = useMarketStore((s) => s.news)
-  const addNews = useMarketStore((s) => s.addNews)
-  const [filter, setFilter] = useState<string | null>(null)
+  const [data, setData] = useState<NewsResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    api.getNews(100).then((events) => {
-      events.forEach((e) => addNews(e))
-    }).catch(() => {})
-  }, [addNews])
+    setLoading(true)
+    setError(null)
+    api
+      .getNews()
+      .then((resp) => {
+        setData(resp)
+        // Expand the first group by default for discoverability.
+        if (resp.groups.length > 0) setExpanded(new Set([resp.groups[0].symbol]))
+      })
+      .catch(() => setError('Failed to load news'))
+      .finally(() => setLoading(false))
+  }, [])
 
-  const allCategories = [...new Set(news.flatMap((n) => n.categories))].slice(0, 12)
-  const filtered = filter ? news.filter((n) => n.categories.includes(filter)) : news
+  const toggle = (symbol: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(symbol)) next.delete(symbol)
+      else next.add(symbol)
+      return next
+    })
+
+  const asOf = data?.asOf
+  const asOfLabel = asOf && asOf !== '1970-01-01T00:00:00Z'
+    ? new Date(asOf).toLocaleString()
+    : null
+
+  const totalArticles = data?.groups.reduce((sum, g) => sum + g.articles.length, 0) ?? 0
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <div>
-        <h1 className="text-xl font-bold">News Feed</h1>
-        <div className="text-sm text-muted mt-0.5">{news.length} articles received</div>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold">News</h1>
+          <div className="text-sm text-muted mt-0.5">
+            {totalArticles} articles across {data?.groups.length ?? 0} symbols
+          </div>
+        </div>
+        {asOfLabel && (
+          <div className="text-xs text-muted bg-border/40 px-2 py-1 rounded">
+            As of <span className="text-text-primary font-mono">{asOfLabel}</span>
+          </div>
+        )}
       </div>
 
-      {allCategories.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilter(null)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              !filter
-                ? 'bg-positive text-surface'
-                : 'bg-border/60 text-muted hover:text-text-primary hover:bg-border'
-            }`}
-          >
-            All ({news.length})
-          </button>
-          {allCategories.map((cat) => {
-            const count = news.filter((n) => n.categories.includes(cat)).length
-            return (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat === filter ? null : cat)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  filter === cat
-                    ? 'bg-positive text-surface'
-                    : 'bg-border/60 text-muted hover:text-text-primary hover:bg-border'
-                }`}
-              >
-                {cat} ({count})
-              </button>
-            )
-          })}
+      {loading && (
+        <div className="bg-card border border-border rounded-xl p-8 text-center text-muted text-sm">
+          Loading…
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="bg-card border border-negative/40 rounded-xl p-6 text-center text-negative text-sm">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && totalArticles === 0 && (
+        <div className="bg-card border border-border rounded-xl p-8 text-center text-muted">
+          <div className="text-3xl mb-2">📰</div>
+          <div className="text-sm">
+            No news available up to the current simulation timestamp yet.
+          </div>
         </div>
       )}
 
       <div className="space-y-3">
-        {filtered.length === 0 ? (
-          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted">
-            <div className="text-3xl mb-2">📰</div>
-            <div className="text-sm">
-              {news.length === 0
-                ? 'No news events received yet. Start the news service to see articles here.'
-                : 'No articles match the selected filter.'}
-            </div>
-          </div>
-        ) : (
-          filtered.map((n) => <NewsItem key={n.id} event={n} />)
-        )}
+        {data?.groups.map((group) => {
+          const isOpen = expanded.has(group.symbol)
+          return (
+            <section key={group.symbol} className="bg-card border border-border rounded-xl overflow-hidden">
+              <button
+                onClick={() => toggle(group.symbol)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-border/30 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <span className="font-bold text-sm">{group.symbol}</span>
+                  {group.company && (
+                    <span className="text-xs text-muted truncate">· {group.company}</span>
+                  )}
+                </div>
+                <span className="text-xs text-muted shrink-0">{group.articles.length}</span>
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-3 space-y-2">
+                  {group.articles.map((a) => (
+                    <NewsItem key={a.id} article={a} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        })}
       </div>
     </div>
   )

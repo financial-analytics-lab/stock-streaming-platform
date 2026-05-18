@@ -6,8 +6,10 @@ import { PriceChart } from '../components/PriceChart'
 import { CandleChart } from '../components/CandleChart'
 import { IntervalSelector } from '../components/IntervalSelector'
 import { NewsItem } from '../components/NewsItem'
+import { ReasoningDrawer } from '../components/ReasoningDrawer'
 import { api } from '../lib/api'
-import type { Article, Candle } from '../types'
+import { postReasoning } from '../lib/reasoningApi'
+import type { Article, Candle, ReasoningRequest } from '../types'
 
 type ChartType = 'line' | 'candle'
 
@@ -21,6 +23,42 @@ export function SymbolDetail() {
   const latest = useMarketStore((s) => (symbol ? s.latestBySymbol[symbol] : undefined))
   const history = useMarketStore((s) => (symbol ? (s.historyBySymbol[symbol] ?? []) : []))
   const [news, setNews] = useState<Article[]>([])
+  const [company, setCompany] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerLoading, setDrawerLoading] = useState(false)
+  const [drawerData, setDrawerData] = useState<unknown | null>(null)
+  const [drawerError, setDrawerError] = useState<string | null>(null)
+  const [activeArticle, setActiveArticle] = useState<Article | null>(null)
+
+  const handleReason = (article: Article) => {
+    const dt = new Date(article.publishedAt)
+    const req: ReasoningRequest = {
+      symbol: article.symbol,
+      company,
+      source: article.source,
+      isin: (article.raw?.isin as string) ?? '',
+      id: article.id,
+      date: dt.toISOString().slice(0, 10),
+      time: dt.toISOString().slice(11, 19),
+      datetime: article.publishedAt,
+      title: article.title,
+      teaser: article.teaser,
+      body: article.body ?? '',
+      url: article.url,
+      imageUrl: article.imageUrl,
+      section: article.section,
+      raw: article.raw,
+    }
+    setActiveArticle(article)
+    setDrawerOpen(true)
+    setDrawerLoading(true)
+    setDrawerData(null)
+    setDrawerError(null)
+    postReasoning(req)
+      .then((resp) => setDrawerData(resp.data))
+      .catch((err) => setDrawerError(err?.message ?? 'Request failed'))
+      .finally(() => setDrawerLoading(false))
+  }
   const setHistory = useMarketStore((s) => s.setHistory)
   const seedCandles = useMarketStore((s) => s.seedCandles)
 
@@ -42,6 +80,7 @@ export function SymbolDetail() {
         .then((resp) => {
           const group = resp.groups.find((g) => g.symbol === symbol.toUpperCase())
           setNews(group?.articles ?? [])
+          setCompany(group?.company ?? '')
         })
         .catch(() => setNews([]))
     }
@@ -191,10 +230,19 @@ export function SymbolDetail() {
               No news available for {symbol} up to the current simulation timestamp.
             </div>
           ) : (
-            news.slice(0, 5).map((n) => <NewsItem key={n.id} article={n} />)
+            news.slice(0, 5).map((n) => <NewsItem key={n.id} article={n} onReason={handleReason} />)
           )}
         </div>
       </div>
     </div>
+
+    <ReasoningDrawer
+      open={drawerOpen}
+      loading={drawerLoading}
+      title={activeArticle?.title ?? null}
+      data={drawerData}
+      error={drawerError}
+      onClose={() => setDrawerOpen(false)}
+    />
   )
 }

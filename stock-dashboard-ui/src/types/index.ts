@@ -61,3 +61,26 @@ export interface WsMessage {
   type: 'tick' | 'candle'
   data: Tick | Candle
 }
+
+export interface ReasoningRequest {
+  symbol: string
+  company: string
+  source: string
+  isin: string
+  id: string
+  date: string
+  time: string
+  datetime: string
+  title: string
+  teaser: string
+  body: string
+  url: string
+  imageUrl: string
+  section: string
+  raw?: Record<string, unknown>
+}
+
+export interface ReasoningResponse {
+  data: unknown
+}
+

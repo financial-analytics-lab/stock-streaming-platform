@@ -6,9 +6,10 @@ interface Props {
   article: Article
   /** Slot reserved for future per-article actions (e.g. sentiment analysis button). */
   action?: ReactNode
+  onReason?: (article: Article) => void
 }
 
-export function NewsItem({ article, action }: Props) {
+export function NewsItem({ article, action, onReason }: Props) {
   const time = new Date(article.publishedAt).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -22,6 +23,14 @@ export function NewsItem({ article, action }: Props) {
         <p className="text-sm font-medium leading-snug">{article.title}</p>
         <div className="flex items-center gap-2 shrink-0 mt-0.5">
           {action}
+          {onReason && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onReason(article) }}
+              className="text-xs px-2 py-0.5 rounded border border-border bg-surface text-muted hover:border-positive hover:text-positive transition-colors"
+            >
+              Reason
+            </button>
+          )}
           {article.url && (
             <a
               href={article.url}

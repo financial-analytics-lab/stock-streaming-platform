@@ -4,10 +4,8 @@ import com.stockstream.core.config.ConfigLoader;
 import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.config.Subscription;
 import com.stockstream.core.consumer.CandleConsumer;
-import com.stockstream.core.consumer.NewsConsumer;
 import com.stockstream.core.consumer.TickConsumer;
 import com.stockstream.dashboard.store.CandleStore;
-import com.stockstream.dashboard.store.NewsStore;
 import com.stockstream.dashboard.store.TickStore;
 import com.stockstream.dashboard.websocket.StockWebSocketHandler;
 import jakarta.annotation.PostConstruct;
@@ -24,19 +22,16 @@ import java.util.concurrent.TimeUnit;
 public class ConsumerService {
 
     private final TickStore tickStore;
-    private final NewsStore newsStore;
     private final CandleStore candleStore;
     private final StockWebSocketHandler wsHandler;
     private ExecutorService executor;
 
     private TickConsumer tickConsumer;
-    private NewsConsumer newsConsumer;
     private final List<CandleConsumer> candleConsumers = new ArrayList<>();
 
-    public ConsumerService(TickStore tickStore, NewsStore newsStore,
+    public ConsumerService(TickStore tickStore,
                            CandleStore candleStore, StockWebSocketHandler wsHandler) {
         this.tickStore = tickStore;
-        this.newsStore = newsStore;
         this.candleStore = candleStore;
         this.wsHandler = wsHandler;
     }
@@ -45,21 +40,15 @@ public class ConsumerService {
     public void start() {
         ConsumerConfig config = ConfigLoader.load();
         Subscription tickSub = ConfigLoader.loadTickSubscription();
-        Subscription newsSub = ConfigLoader.loadNewsSubscription();
         List<Subscription> candleSubs = ConfigLoader.loadCandleSubscriptions();
 
-        executor = Executors.newFixedThreadPool(2 + candleSubs.size());
+        executor = Executors.newFixedThreadPool(1 + candleSubs.size());
 
         tickConsumer = new TickConsumer(config, tickSub.topic(), tickSub.groupId(), tick -> {
             tickStore.add(tick);
             wsHandler.broadcast("tick", tick);
             System.out.printf("[TICK] %s | price=%.2f | vol=%d | lag=%dms%n",
               tick.securityName(), tick.price(), tick.volume(), tick.lagMs());
-        });
-
-        newsConsumer = new NewsConsumer(config, newsSub.topic(), newsSub.groupId(), event -> {
-            newsStore.add(event);
-            wsHandler.broadcast("news", event);
         });
 
         for (Subscription sub : candleSubs) {
@@ -71,7 +60,6 @@ public class ConsumerService {
         }
 
         executor.submit(tickConsumer::start);
-        executor.submit(newsConsumer::start);
         for (CandleConsumer cc : candleConsumers) {
             executor.submit(cc::start);
         }
@@ -80,7 +68,6 @@ public class ConsumerService {
     @PreDestroy
     public void stop() {
         if (tickConsumer != null) tickConsumer.shutdown();
-        if (newsConsumer != null) newsConsumer.shutdown();
         for (CandleConsumer cc : candleConsumers) cc.shutdown();
         if (executor != null) {
             executor.shutdown();

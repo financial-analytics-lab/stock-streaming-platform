@@ -36,7 +36,7 @@ export function Metrics() {
             WebSocket {connected ? 'Connected' : 'Disconnected'}
           </div>
           <div className="text-xs text-muted">
-            {connected ? 'Receiving live tick and news events' : 'Attempting to reconnect…'}
+            {connected ? 'Receiving live tick and candle events' : 'Attempting to reconnect…'}
           </div>
         </div>
       </div>
@@ -47,7 +47,7 @@ export function Metrics() {
             label="Total Events Received"
             value={metrics.totalReceived}
             color="#E2E8F0"
-            subtext="Tick + news events since startup"
+            subtext="Tick events since startup"
           />
           <MetricGauge
             label="Average Kafka Lag"
@@ -82,9 +82,10 @@ export function Metrics() {
           {[
             ['Publisher', 'CSV → Kafka stock-ticks', '#00D4AA'],
             ['Tick Consumer', 'Kafka → TickStore → WebSocket', '#00D4AA'],
-            ['News Consumer', 'Kafka → NewsStore → WebSocket', '#00D4AA'],
-            ['REST API', 'GET /api/symbols, /ticks/{sym}/history, /news', '#F5A623'],
-            ['WebSocket', 'ws://.../ws/live  (tick | news events)', '#F5A623'],
+            ['Candle Processor', 'Kafka Streams → candles-{interval}', '#00D4AA'],
+            ['News Loader', 'news_scraping/data → /api/news (asOf-filtered)', '#00D4AA'],
+            ['REST API', 'GET /api/symbols, /ticks/{sym}/history, /candles, /news', '#F5A623'],
+            ['WebSocket', 'ws://.../ws/live  (tick | candle events)', '#F5A623'],
           ].map(([label, desc, color]) => (
             <div key={label} className="flex gap-3">
               <span className="shrink-0 w-28" style={{ color }}>{label}</span>

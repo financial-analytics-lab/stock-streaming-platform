@@ -3,6 +3,7 @@ package com.stockstream.dashboard.store;
 import com.stockstream.core.model.Tick;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -53,6 +54,21 @@ public class TickStore {
 
     public long getTotalReceived() {
         return totalReceived.get();
+    }
+
+    /** Max event-time across the latest tick of each symbol — the current simulated "now". */
+    public Optional<Instant> currentSimulationTime() {
+        Instant max = null;
+        for (ArrayDeque<Tick> deque : store.values()) {
+            Tick last;
+            synchronized (deque) {
+                last = deque.peekLast();
+            }
+            if (last == null) continue;
+            Instant t = last.timestamp();
+            if (t != null && (max == null || t.isAfter(max))) max = t;
+        }
+        return Optional.ofNullable(max);
     }
 
     public double getAverageLagMs() {

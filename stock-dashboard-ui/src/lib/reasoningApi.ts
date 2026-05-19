@@ -6,6 +6,6 @@ const reasoningClient = axios.create({
 })
 
 export async function postReasoning(req: ReasoningRequest): Promise<ReasoningResponse> {
-  const { data } = await reasoningClient.post<ReasoningResponse>('', req)
+  const { data } = await reasoningClient.post<ReasoningResponse>('/analyze', req)
   return data
 }

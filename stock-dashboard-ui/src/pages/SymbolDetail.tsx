@@ -138,6 +138,7 @@ export function SymbolDetail() {
   const candleEmpty = candleHistory.length === 0 && !liveCandle
 
   return (
+    <>
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
       <div className="flex items-center gap-4">
@@ -244,5 +245,6 @@ export function SymbolDetail() {
       error={drawerError}
       onClose={() => setDrawerOpen(false)}
     />
+    </>
   )
 }

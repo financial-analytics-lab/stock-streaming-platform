@@ -77,6 +77,7 @@ export function NewsFeed() {
   const totalArticles = data?.groups.reduce((sum, g) => sum + g.articles.length, 0) ?? 0
 
   return (
+    <>
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-end justify-between gap-4">
         <div>
@@ -152,5 +153,6 @@ export function NewsFeed() {
       error={drawerError}
       onClose={() => setDrawerOpen(false)}
     />
+    </>
   )
 }

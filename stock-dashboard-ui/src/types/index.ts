@@ -80,7 +80,24 @@ export interface ReasoningRequest {
   raw?: Record<string, unknown>
 }
 
+export type OutlookDirection = 'up' | 'down' | 'flat'
+export type OutlookMagnitude = 'small' | 'medium' | 'large'
+export type OutlookHorizon = 'short' | 'medium' | 'large'
+
+export interface OutlookEntry {
+  direction: OutlookDirection
+  magnitude: OutlookMagnitude
+  confidence: number
+  explanation: string
+}
+
 export interface ReasoningResponse {
-  data: unknown
+  status: string
+  ticker: string
+  summary: string
+  technical_view: string
+  sentiment_note: string
+  outlook: Record<OutlookHorizon, OutlookEntry>
+  risks: string
 }
 

@@ -4,7 +4,7 @@ import { NewsItem } from '../components/NewsItem'
 import { ReasoningDrawer } from '../components/ReasoningDrawer'
 import { api } from '../lib/api'
 import { postReasoning } from '../lib/reasoningApi'
-import type { Article, NewsResponse, ReasoningRequest } from '../types'
+import type { Article, NewsResponse, ReasoningRequest, ReasoningResponse } from '../types'
 
 export function NewsFeed() {
   const [data, setData] = useState<NewsResponse | null>(null)
@@ -13,7 +13,7 @@ export function NewsFeed() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerLoading, setDrawerLoading] = useState(false)
-  const [drawerData, setDrawerData] = useState<unknown | null>(null)
+  const [drawerData, setDrawerData] = useState<ReasoningResponse | null>(null)
   const [drawerError, setDrawerError] = useState<string | null>(null)
   const [activeArticle, setActiveArticle] = useState<Article | null>(null)
 
@@ -42,7 +42,7 @@ export function NewsFeed() {
     setDrawerData(null)
     setDrawerError(null)
     postReasoning(req)
-      .then((resp) => setDrawerData(resp.data))
+      .then((resp) => setDrawerData(resp))
       .catch((err) => setDrawerError(err?.message ?? 'Request failed'))
       .finally(() => setDrawerLoading(false))
   }

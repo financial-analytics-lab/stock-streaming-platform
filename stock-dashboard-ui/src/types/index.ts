@@ -61,3 +61,43 @@ export interface WsMessage {
   type: 'tick' | 'candle'
   data: Tick | Candle
 }
+
+export interface ReasoningRequest {
+  symbol: string
+  company: string
+  source: string
+  isin: string
+  id: string
+  date: string
+  time: string
+  datetime: string
+  title: string
+  teaser: string
+  body: string
+  url: string
+  imageUrl: string
+  section: string
+  raw?: Record<string, unknown>
+}
+
+export type OutlookDirection = 'up' | 'down' | 'flat'
+export type OutlookMagnitude = 'small' | 'medium' | 'large'
+export type OutlookHorizon = 'short' | 'medium' | 'large'
+
+export interface OutlookEntry {
+  direction: OutlookDirection
+  magnitude: OutlookMagnitude
+  confidence: number
+  explanation: string
+}
+
+export interface ReasoningResponse {
+  status: string
+  ticker: string
+  summary: string
+  technical_view: string
+  sentiment_note: string
+  outlook: Record<OutlookHorizon, OutlookEntry>
+  risks: string
+}
+

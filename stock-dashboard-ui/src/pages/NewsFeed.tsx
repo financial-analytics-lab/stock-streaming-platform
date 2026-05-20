@@ -1,14 +1,51 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { NewsItem } from '../components/NewsItem'
+import { ReasoningDrawer } from '../components/ReasoningDrawer'
 import { api } from '../lib/api'
-import type { NewsResponse } from '../types'
+import { postReasoning } from '../lib/reasoningApi'
+import type { Article, NewsResponse, ReasoningRequest, ReasoningResponse } from '../types'
 
 export function NewsFeed() {
   const [data, setData] = useState<NewsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerLoading, setDrawerLoading] = useState(false)
+  const [drawerData, setDrawerData] = useState<ReasoningResponse | null>(null)
+  const [drawerError, setDrawerError] = useState<string | null>(null)
+  const [activeArticle, setActiveArticle] = useState<Article | null>(null)
+
+  const handleReason = (article: Article, company = '') => {
+    const dt = new Date(article.publishedAt)
+    const req: ReasoningRequest = {
+      symbol: article.symbol,
+      company,
+      source: article.source,
+      isin: (article.raw?.isin as string) ?? '',
+      id: article.id,
+      date: dt.toISOString().slice(0, 10),
+      time: dt.toISOString().slice(11, 19),
+      datetime: article.publishedAt,
+      title: article.title,
+      teaser: article.teaser,
+      body: article.body ?? '',
+      url: article.url,
+      imageUrl: article.imageUrl,
+      section: article.section,
+      raw: article.raw,
+    }
+    setActiveArticle(article)
+    setDrawerOpen(true)
+    setDrawerLoading(true)
+    setDrawerData(null)
+    setDrawerError(null)
+    postReasoning(req)
+      .then((resp) => setDrawerData(resp))
+      .catch((err) => setDrawerError(err?.message ?? 'Request failed'))
+      .finally(() => setDrawerLoading(false))
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -40,6 +77,7 @@ export function NewsFeed() {
   const totalArticles = data?.groups.reduce((sum, g) => sum + g.articles.length, 0) ?? 0
 
   return (
+    <>
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-end justify-between gap-4">
         <div>
@@ -97,7 +135,7 @@ export function NewsFeed() {
               {isOpen && (
                 <div className="px-3 pb-3 space-y-2">
                   {group.articles.map((a) => (
-                    <NewsItem key={a.id} article={a} />
+                    <NewsItem key={a.id} article={a} onReason={(art) => handleReason(art, group.company)} />
                   ))}
                 </div>
               )}
@@ -106,5 +144,15 @@ export function NewsFeed() {
         })}
       </div>
     </div>
+
+    <ReasoningDrawer
+      open={drawerOpen}
+      loading={drawerLoading}
+      title={activeArticle?.title ?? null}
+      data={drawerData}
+      error={drawerError}
+      onClose={() => setDrawerOpen(false)}
+    />
+    </>
   )
 }

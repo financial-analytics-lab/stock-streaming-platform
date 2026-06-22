@@ -24,6 +24,7 @@ public final class ConfigLoader {
     static final List<String> DEFAULT_CANDLE_INTERVALS = List.of("1s", "5s", "1m", "5m", "15m");
     static final String DEFAULT_CANDLE_TOPIC_PREFIX = "candles-";
     static final String DEFAULT_CANDLE_GROUP_ID = "dashboard-candle-consumer";
+    static final int DEFAULT_TICK_PARTITION_COUNT = 31;
 
     private ConfigLoader() {}
 
@@ -100,6 +101,25 @@ public final class ConfigLoader {
             subs.add(new Subscription(prefix + interval, groupId + "-" + interval));
         }
         return subs;
+    }
+
+    /** Load number of tick partitions/consumers to run in parallel (default: 31). */
+    public static int loadTickPartitionCount() {
+        return loadTickPartitionCount("consumer.properties");
+    }
+
+    public static int loadTickPartitionCount(String resourceName) {
+        Properties fileProps = loadFromClasspath(resourceName);
+        String raw = resolve(fileProps, "tick.partition.count", "STOCK_CONSUMER_TICK_PARTITION_COUNT");
+        if (raw == null) return DEFAULT_TICK_PARTITION_COUNT;
+        try {
+            int parsed = Integer.parseInt(raw.trim());
+            if (parsed > 0) return parsed;
+        } catch (NumberFormatException ignored) {
+            // fall through
+        }
+        LOG.warning("Invalid tick.partition.count='" + raw + "'. Using default: " + DEFAULT_TICK_PARTITION_COUNT);
+        return DEFAULT_TICK_PARTITION_COUNT;
     }
 
     // ---- internals ----

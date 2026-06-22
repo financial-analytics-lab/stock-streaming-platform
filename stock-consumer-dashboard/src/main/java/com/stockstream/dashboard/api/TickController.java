@@ -26,6 +26,9 @@ public class TickController {
         return tickStore.getLatestPerSymbol().values();
     }
 
+    @GetMapping("/ticks/latest/{symbol}")
+    public Tick getLatestOfSymbol(@PathVariable String symbol) { return tickStore.getLatest(symbol); }
+
     @GetMapping("/ticks/{symbol}/history")
     public List<Tick> getHistory(
             @PathVariable String symbol,

@@ -86,6 +86,20 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
     /** Called once after the poll loop exits, before consumer.close(). */
     protected void onStop() {}
 
+    /** Exposes topic to subclasses that override subscription behavior. */
+    protected final String topic() {
+        return topic;
+    }
+
+    /**
+     * Subscription hook.
+     * Default behavior: group subscription to the topic.
+     * Subclasses can override to use explicit partition assignment.
+     */
+    protected void subscribeToSource(KafkaConsumer<String, byte[]> consumer) {
+        consumer.subscribe(Collections.singletonList(topic));
+    }
+
     // ---- Lifecycle ----
 
     /** Start the poll loop. Blocks the calling thread. */
@@ -97,7 +111,7 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
         Properties props = config.toKafkaProperties();
         props.put(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG, groupId);
         consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(Collections.singletonList(topic));
+        subscribeToSource(consumer);
         log.info("Subscribed to topic '" + topic + "' with group '" + groupId + "'");
 
         onStart();
@@ -107,7 +121,6 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
                 ConsumerRecords<String, byte[]> records = consumer.poll(config.pollTimeout());
 
                 for (ConsumerRecord<String, byte[]> record : records) {
-                    long recordStartTime = System.currentTimeMillis();
 
                     T message;
                     try {

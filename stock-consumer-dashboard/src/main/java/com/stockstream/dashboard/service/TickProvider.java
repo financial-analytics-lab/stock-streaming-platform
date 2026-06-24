@@ -54,4 +54,8 @@ public class TickProvider {
         return aggregatedResult;
     }
 
+    public List<Tick> getHistoricalTicks(String symbol, Instant start, Instant end) {
+        return diskStorage.getRangeFromDisk(symbol, start, end);
+    }
+
 }

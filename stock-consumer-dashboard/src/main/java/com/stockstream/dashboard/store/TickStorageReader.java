@@ -1,5 +1,5 @@
 package com.stockstream.dashboard.store;
-
+ 
 import com.stockstream.core.model.Tick;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -18,66 +18,148 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
+ 
 @Service
 public class TickStorageReader {
     private static final int RECORD_SIZE = 128;
     private static final int PUBLISHED_AT_OFFSET = 16; // Offset within the 128-byte record
-    private final Path baseDir = Paths.get("DATA");
-
+    private final Path baseDir;
+ 
     private final DateTimeFormatter dateDirFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-    private final DateTimeFormatter hourFormatter = DateTimeFormatter.ofPattern("hh:00 a", Locale.US);
-    private final DateTimeFormatter minFormatter = DateTimeFormatter.ofPattern("mm");
-
+    private static final ZoneId ZONE_CAIRO = ZoneId.of("Africa/Cairo");
+    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH-mm");
+ 
+    public TickStorageReader(@Value("${storage.base-dir:DATA}") String baseDir) {
+        this.baseDir = Paths.get(baseDir);
+    }
+ 
+    public static class SegmentInterval {
+        public final Instant start;
+        public final Instant end;
+        public final Path path;
+ 
+        public SegmentInterval(Instant start, Instant end, Path path) {
+            this.start = start;
+            this.end = end;
+            this.path = path;
+        }
+    }
+ 
+    private SegmentInterval parseSegmentInterval(Path path) {
+        try {
+            String segmentFile = path.getFileName().toString(); // e.g., "23-40 to 23-41 seg.bin"
+            String dateDir = path.getParent().getFileName().toString(); // e.g. "24-06-2026"
+ 
+            // 1. Parse date
+            java.time.LocalDate date = java.time.LocalDate.parse(dateDir, dateDirFormatter);
+ 
+            // 2. Parse start and end times from segmentFile (format: "HH-mm to HH-mm seg.bin")
+            String cleanName = segmentFile.replace(" seg.bin", ""); // "23-40 to 23-41"
+            String[] timeParts = cleanName.split(" to ");
+            
+            String startStr = timeParts[0].trim(); // "23-40"
+            String endStr = timeParts[1].trim(); // "23-41"
+ 
+            String[] startHMS = startStr.split("-");
+            int startHour = Integer.parseInt(startHMS[0]);
+            int startMin = Integer.parseInt(startHMS[1]);
+ 
+            String[] endHMS = endStr.split("-");
+            int endHour = Integer.parseInt(endHMS[0]);
+            int endMin = Integer.parseInt(endHMS[1]);
+ 
+            ZonedDateTime startZdt = ZonedDateTime.of(date, java.time.LocalTime.of(startHour, startMin), ZONE_CAIRO);
+            
+            // Handle wrap around midnight if end time is numerically less than start time
+            ZonedDateTime endZdt;
+            if (endHour < startHour || (endHour == startHour && endMin < startMin)) {
+                endZdt = ZonedDateTime.of(date.plusDays(1), java.time.LocalTime.of(endHour, endMin), ZONE_CAIRO);
+            } else {
+                endZdt = ZonedDateTime.of(date, java.time.LocalTime.of(endHour, endMin), ZONE_CAIRO);
+            }
+ 
+            return new SegmentInterval(startZdt.toInstant(), endZdt.toInstant(), path);
+        } catch (Exception e) {
+            return null; // Not a valid segment file structure
+        }
+    }
+ 
     /**
-     * Executes a lightning-fast range query using binary search directly over the on-disk segment.
+     * Executes a lightning-fast range query using binary search directly over the on-disk segments.
      */
     public List<Tick> getRangeFromDisk(String symbol, Instant startRange, Instant endRange) {
         List<Tick> result = new ArrayList<>();
-
-        // Find the relevant 15-minute file segment path
-        // (Note: If queries cross 15-minute boundaries, iterate through all overlapping intervals)
-        Path targetFile = resolvePartitionPath(symbol, startRange);
-
-        if (!Files.exists(targetFile)) {
-            return result; // No data recorded on disk for this specific segment window
-        }
-
-        try (FileChannel channel = FileChannel.open(targetFile, StandardOpenOption.READ)) {
-            long totalRecords = channel.size() / RECORD_SIZE;
-            if (totalRecords == 0) return result;
-
-            // 1. Binary Search on disk to find the index of the first record >= startRange
-            long targetIndex = binarySearchFirstRecord(channel, totalRecords, startRange.toEpochMilli());
-
-            if (targetIndex == -1) {
-                return result; // All elements in this file are older than the start range
-            }
-
-            // 2. Sequential Scan from the matched index forward
-            channel.position(targetIndex * RECORD_SIZE);
-            ByteBuffer recordBuffer = ByteBuffer.allocate(RECORD_SIZE);
-
-            while (channel.read(recordBuffer) == RECORD_SIZE) {
-                recordBuffer.flip();
-                Tick tick = deserialize(recordBuffer);
-
-                // Break out immediately if we step past our designated end-query boundary
-                if (tick.publishedAt().isAfter(endRange)) {
-                    break;
+ 
+        // 1. Locate all overlapping segment files across the query range
+        List<SegmentInterval> intervals = new ArrayList<>();
+        ZonedDateTime startZdt = startRange.atZone(ZONE_CAIRO);
+        ZonedDateTime endZdt = endRange.atZone(ZONE_CAIRO);
+ 
+        java.time.LocalDate startDate = startZdt.toLocalDate();
+        java.time.LocalDate endDate = endZdt.toLocalDate();
+ 
+        for (java.time.LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            String dateStr = date.format(dateDirFormatter);
+            Path datePath = baseDir.resolve(symbol.toUpperCase()).resolve(dateStr);
+            if (Files.exists(datePath)) {
+                try (java.util.stream.Stream<Path> walk = Files.walk(datePath)) {
+                    walk.filter(Files::isRegularFile)
+                        .forEach(p -> {
+                            SegmentInterval interval = parseSegmentInterval(p);
+                            if (interval != null) {
+                                // Check if interval overlaps with the range [startRange, endRange]
+                                if (!interval.start.isAfter(endRange) && !interval.end.isBefore(startRange)) {
+                                    intervals.add(interval);
+                                }
+                            }
+                        });
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-
-                if (!tick.publishedAt().isBefore(startRange)) {
-                    result.add(tick);
-                }
-                recordBuffer.clear();
             }
-
-        } catch (IOException e) {
-            e.printStackTrace();
         }
-
+ 
+        // Sort intervals chronologically
+        intervals.sort(java.util.Comparator.comparing(i -> i.start));
+ 
+        // 2. Read from each overlapping segment file
+        for (SegmentInterval interval : intervals) {
+            Path targetFile = interval.path;
+            try (FileChannel channel = FileChannel.open(targetFile, StandardOpenOption.READ)) {
+                long totalRecords = channel.size() / RECORD_SIZE;
+                if (totalRecords == 0) continue;
+ 
+                // Binary Search on disk to find the index of the first record >= startRange
+                long targetIndex = binarySearchFirstRecord(channel, totalRecords, startRange.toEpochMilli());
+                if (targetIndex == -1) {
+                    continue; // All elements in this file are older than the start range
+                }
+ 
+                // Sequential Scan from the matched index forward
+                channel.position(targetIndex * RECORD_SIZE);
+                ByteBuffer recordBuffer = ByteBuffer.allocate(RECORD_SIZE);
+ 
+                while (channel.read(recordBuffer) == RECORD_SIZE) {
+                    recordBuffer.flip();
+                    Tick tick = deserialize(recordBuffer);
+ 
+                    // Break out if we step past our designated end-query boundary
+                    if (tick.publishedAt().isAfter(endRange)) {
+                        break;
+                    }
+ 
+                    if (!tick.publishedAt().isBefore(startRange)) {
+                        result.add(tick);
+                    }
+                    recordBuffer.clear();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+ 
         return result;
     }
 
@@ -143,25 +225,17 @@ public class TickStorageReader {
     private Path resolvePartitionPath(String symbol, Instant time) {
         ZonedDateTime zdt = time.atZone(ZoneId.of("Africa/Cairo"));
         String dateDir = zdt.format(dateDirFormatter);
-
-        int minute = zdt.getMinute();
-        int startRangeMin = (minute / 15) * 15;
-
-        ZonedDateTime windowStart = zdt.withMinute(startRangeMin).withSecond(0).withNano(0);
-        ZonedDateTime windowEnd = windowStart.plusMinutes(15);
-
-        String hourBlockDir = String.format("%s to %s",
-                windowStart.format(hourFormatter),
-                windowStart.withMinute(0).plusHours(1).format(hourFormatter));
-
+ 
+        ZonedDateTime windowStart = zdt.withSecond(0).withNano(0);
+        ZonedDateTime windowEnd = windowStart.plusMinutes(1);
+ 
         String segmentFile = String.format("%s to %s seg.bin",
-                windowStart.format(minFormatter),
-                windowEnd.format(minFormatter));
-
+                windowStart.format(timeFormatter),
+                windowEnd.format(timeFormatter));
+ 
         return baseDir
                 .resolve(symbol.toUpperCase())
                 .resolve(dateDir)
-                .resolve(hourBlockDir)
                 .resolve(segmentFile);
     }
 }

@@ -1,6 +1,7 @@
 package com.stockstream.dashboard.store;
  
 import com.stockstream.core.model.Tick;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
  
@@ -24,28 +25,32 @@ public class ScheduledTickStorageWriter {
     private static final Logger log = Logger.getLogger(ScheduledTickStorageWriter.class.getName());
  
     // Root directory where the partitioned data will be written
-    private final Path baseDir = Paths.get("DATA");
+    private final Path baseDir;
     private final TickStore tickStore;
+    private final int flushWindowMinutes;
  
     // Time formatters to match your exact directory naming specifications
     private final DateTimeFormatter dateDirFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-    private final DateTimeFormatter hourFormatter = DateTimeFormatter.ofPattern("hh:00 a", Locale.US);
-    private final DateTimeFormatter minFormatter = DateTimeFormatter.ofPattern("mm");
+    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH-mm");
  
-    public ScheduledTickStorageWriter(TickStore tickStore) {
+    public ScheduledTickStorageWriter(TickStore tickStore, 
+                                      @Value("${storage.base-dir:DATA}") String baseDir,
+                                      @Value("${storage.flush-window-minutes:1}") int flushWindowMinutes) {
         this.tickStore = tickStore;
+        this.baseDir = Paths.get(baseDir);
+        this.flushWindowMinutes = flushWindowMinutes;
     }
  
     /**
-     * Runs every 15 minutes on the clock (e.g., 10:00, 10:15, 10:30, 10:45...)
+     * Runs periodically on the clock based on configuration.
      * Aligned to the Africa/Cairo trading timezone.
      */
-    @Scheduled(cron = "0 0/15 * * * MON-FRI", zone = "Africa/Cairo")
-    public void flushPastFifteenMinuteWindow() throws IOException {
-        // 1. Calculate the exact 15-minute market time window that just concluded
+    @Scheduled(cron = "${storage.flush-cron:0 * * * * *}", zone = "Africa/Cairo")
+    public void flushPastWindow() throws IOException {
+        // 1. Calculate the exact market time window that just concluded
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Africa/Cairo"));
         ZonedDateTime windowEnd = now.withSecond(0).withNano(0);
-        ZonedDateTime windowStart = windowEnd.minusMinutes(15);
+        ZonedDateTime windowStart = windowEnd.minusMinutes(flushWindowMinutes);
  
         Instant from = windowStart.toInstant();
         Instant to = windowEnd.toInstant();
@@ -64,26 +69,20 @@ public class ScheduledTickStorageWriter {
     }
  
     /**
-     * Resolves paths to match the exact nested directory structure requested:
-     * DATA / [Symbol] / [dd-MM-yyyy] / [HH:MM AM to HH:MM AM] / [MM to MM seg].bin
+     * Resolves paths directly inside the daily folder:
+     * baseDir / [Symbol] / [dd-MM-yyyy] / [HH-mm to HH-mm seg].bin
      */
     private Path resolvePartitionPath(String symbol, ZonedDateTime start, ZonedDateTime end) {
         String dateDir = start.format(dateDirFormatter);
  
-        // Generates: "10:00 AM to 11:00 AM" (Handles cross-hour bounds cleanly)
-        String hourBlockDir = String.format("%s to %s",
-                start.format(hourFormatter),
-                start.plusHours(1).withMinute(0).format(hourFormatter));
- 
-        // Generates: "00 to 15 seg.bin"
+        // Generates: "HH-mm to HH-mm seg.bin" (e.g. "23-59 to 00-00 seg.bin")
         String segmentFile = String.format("%s to %s seg.bin",
-                start.format(minFormatter),
-                end.format(minFormatter));
+                start.format(timeFormatter),
+                end.format(timeFormatter));
  
         return baseDir
                 .resolve(symbol.toUpperCase())
                 .resolve(dateDir)
-                .resolve(hourBlockDir)
                 .resolve(segmentFile);
     }
  
@@ -129,6 +128,6 @@ public class ScheduledTickStorageWriter {
                 ch.write(buffer);
             }
         }
-        log.fine("Successfully wrote " + ticks.size() + " ticks to disk segment: " + file);
+        log.info("Successfully wrote " + ticks.size() + " ticks to disk segment: " + file);
     }
 }

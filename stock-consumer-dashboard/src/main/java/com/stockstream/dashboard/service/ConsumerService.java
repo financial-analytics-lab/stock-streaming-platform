@@ -8,7 +8,6 @@ import com.stockstream.core.consumer.NewsConsumer;
 import com.stockstream.core.consumer.TickConsumerGroup;
 import com.stockstream.core.metrics.ConsumerMetrics;
 import com.stockstream.dashboard.store.CandleStore;
-import com.stockstream.dashboard.store.NewsStore;
 import com.stockstream.dashboard.store.TickStore;
 import com.stockstream.dashboard.websocket.StockWebSocketHandler;
 import jakarta.annotation.PostConstruct;
@@ -25,7 +24,6 @@ import java.util.concurrent.TimeUnit;
 public class ConsumerService {
 
     private final TickStore tickStore;
-    private final NewsStore newsStore;
     private final CandleStore candleStore;
     private final StockWebSocketHandler wsHandler;
     private final CsvMetricsWriter csvWriter;
@@ -40,7 +38,6 @@ public class ConsumerService {
     public ConsumerService(TickStore tickStore, NewsStore newsStore,
                            CandleStore candleStore, StockWebSocketHandler wsHandler, CsvMetricsWriter csvWriter) {
         this.tickStore = tickStore;
-        this.newsStore = newsStore;
         this.candleStore = candleStore;
         this.wsHandler = wsHandler;
         this.csvWriter = csvWriter;
@@ -50,7 +47,6 @@ public class ConsumerService {
     public void start() {
         ConsumerConfig config = ConfigLoader.load();
         Subscription tickSub = ConfigLoader.loadTickSubscription();
-        Subscription newsSub = ConfigLoader.loadNewsSubscription();
         List<Subscription> candleSubs = ConfigLoader.loadCandleSubscriptions();
         int tickPartitions = ConfigLoader.loadTickPartitionCount();
 

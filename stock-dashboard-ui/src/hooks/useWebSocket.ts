@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { useMarketStore } from '../store/useMarketStore'
-import type { WsMessage, Tick, NewsEvent, Candle } from '../types'
+import type { WsMessage, Tick, Candle } from '../types'
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const addTick = useMarketStore((s) => s.addTick)
-  const addNews = useMarketStore((s) => s.addNews)
   const addCandle = useMarketStore((s) => s.addCandle)
   const setConnected = useMarketStore((s) => s.setConnected)
 
@@ -25,7 +24,6 @@ export function useWebSocket() {
         try {
           const msg = JSON.parse(event.data as string) as WsMessage
           if (msg.type === 'tick') addTick(msg.data as Tick)
-          else if (msg.type === 'news') addNews(msg.data as NewsEvent)
           else if (msg.type === 'candle') addCandle(msg.data as Candle)
         } catch {
           // ignore malformed messages
@@ -47,5 +45,5 @@ export function useWebSocket() {
       clearTimeout(reconnectTimer)
       wsRef.current?.close()
     }
-  }, [addTick, addNews, addCandle, setConnected])
+  }, [addTick, addCandle, setConnected])
 }

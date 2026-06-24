@@ -2,8 +2,8 @@
 *.parquet
 *.jar
 *.csv.crc
-
 ../**/**/target/
 *.class
 .*crc
-./data
+data
+

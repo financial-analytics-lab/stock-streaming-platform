@@ -1,23 +1,83 @@
 package com.stockstream.dashboard.api;
 
-import com.stockstream.core.model.NewsEvent;
-import com.stockstream.dashboard.store.NewsStore;
+import com.stockstream.dashboard.model.news.Article;
+import com.stockstream.dashboard.model.news.NewsGroup;
+import com.stockstream.dashboard.model.news.NewsResponse;
+import com.stockstream.dashboard.service.news.NewsLoader;
+import com.stockstream.dashboard.service.news.NewsLoader.SymbolBundle;
+import com.stockstream.dashboard.store.TickStore;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/news")
 public class NewsController {
 
-    private final NewsStore newsStore;
+    private final NewsLoader loader;
+    private final TickStore tickStore;
 
-    public NewsController(NewsStore newsStore) {
-        this.newsStore = newsStore;
+    public NewsController(NewsLoader loader, TickStore tickStore) {
+        this.loader = loader;
+        this.tickStore = tickStore;
     }
 
+    /**
+     * Articles grouped by symbol, filtered to those published at or before the
+     * current simulation timestamp. Returns a slim view (no body, no raw) so the
+     * payload stays small; fetch full content per article via {@link #getArticle}.
+     */
     @GetMapping
-    public List<NewsEvent> getNews(@RequestParam(defaultValue = "50") int limit) {
-        return newsStore.getRecent(Math.min(limit, 100));
+    public NewsResponse getNews(@RequestParam(required = false) String asOf) {
+        Instant cutoff = resolveAsOf(asOf);
+
+        List<NewsGroup> groups = new ArrayList<>();
+        if (!cutoff.equals(Instant.EPOCH)) {
+            for (SymbolBundle bundle : loader.getBundles()) {
+                List<Article> articles = bundle.sliceAsOf(cutoff).stream()
+                        .map(NewsController::slim)
+                        .toList();
+                if (!articles.isEmpty()) {
+                    groups.add(new NewsGroup(bundle.symbol(), bundle.company(), articles));
+                }
+            }
+            groups.sort((a, b) -> a.symbol().compareTo(b.symbol()));
+        }
+
+        return new NewsResponse(cutoff, groups);
+    }
+
+    /** Full article (including body + raw) for the future sentiment action. */
+    @GetMapping("/{id}")
+    public ResponseEntity<Article> getArticle(@PathVariable String id) {
+        return loader.findById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private Instant resolveAsOf(String explicit) {
+        if (explicit != null && !explicit.isBlank()) {
+            try {
+                return Instant.parse(explicit);
+            } catch (Exception ignored) {
+                // fall through to simulation time
+            }
+        }
+        Optional<Instant> simNow = tickStore.currentSimulationTime();
+        return simNow.orElse(Instant.EPOCH);
+    }
+
+    private static Article slim(Article a) {
+        return new Article(
+                a.id(), a.symbol(), a.source(), a.publishedAt(),
+                a.title(), a.teaser(),
+                null,
+                a.url(), a.imageUrl(), a.section(),
+                null
+        );
     }
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Tick, NewsEvent, MetricsData, Candle } from '../types'
+import type { Tick, MetricsData, Candle } from '../types'
 
 const MAX_HISTORY = 500
 const MAX_CANDLES = 500
@@ -7,7 +7,6 @@ const MAX_CANDLES = 500
 interface MarketState {
   latestBySymbol: Record<string, Tick>
   historyBySymbol: Record<string, Tick[]>
-  news: NewsEvent[]
   connected: boolean
   metrics: MetricsData | null
 
@@ -15,7 +14,6 @@ interface MarketState {
   liveCandle: Record<string, Record<string, Candle | null>>
 
   addTick: (tick: Tick) => void
-  addNews: (event: NewsEvent) => void
   setHistory: (symbol: string, ticks: Tick[]) => void
   setConnected: (connected: boolean) => void
   setMetrics: (metrics: MetricsData) => void
@@ -39,7 +37,6 @@ function mergeClosed(existing: Candle[], incoming: Candle): Candle[] {
 export const useMarketStore = create<MarketState>((set) => ({
   latestBySymbol: {},
   historyBySymbol: {},
-  news: [],
   connected: false,
   metrics: null,
   candleHistory: {},
@@ -56,11 +53,6 @@ export const useMarketStore = create<MarketState>((set) => ({
         historyBySymbol: { ...state.historyBySymbol, [tick.symbol]: history },
       }
     }),
-
-  addNews: (event) =>
-    set((state) => ({
-      news: [event, ...state.news].slice(0, 100),
-    })),
 
   setHistory: (symbol, ticks) =>
     set((state) => ({

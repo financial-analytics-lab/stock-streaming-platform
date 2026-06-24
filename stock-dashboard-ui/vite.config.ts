@@ -15,6 +15,10 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      '/reasoning': {
+        target: 'https://sentiment-analysis-service-production.up.railway.app',
+        changeOrigin: true,
+      },
     },
   },
 })

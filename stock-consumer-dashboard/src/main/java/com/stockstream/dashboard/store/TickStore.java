@@ -102,6 +102,21 @@ public class TickStore {
         return totalReceived.get();
     }
 
+    /** Max event-time across the latest tick of each symbol — the current simulated "now". */
+    public Optional<Instant> currentSimulationTime() {
+        Instant max = null;
+        for (ArrayDeque<Tick> deque : store.values()) {
+            Tick last;
+            synchronized (deque) {
+                last = deque.peekLast();
+            }
+            if (last == null) continue;
+            Instant t = last.timestamp();
+            if (t != null && (max == null || t.isAfter(max))) max = t;
+        }
+        return Optional.ofNullable(max);
+    }
+
     public double getAverageLagMs() {
         long total = totalReceived.get();
         return total == 0 ? 0.0 : (double) lagSum.sum() / total;

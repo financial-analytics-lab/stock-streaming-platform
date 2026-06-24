@@ -4,7 +4,9 @@ import com.stockstream.core.config.ConfigLoader;
 import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.config.Subscription;
 import com.stockstream.core.consumer.CandleConsumer;
-import com.stockstream.core.consumer.TickConsumer;
+import com.stockstream.core.consumer.NewsConsumer;
+import com.stockstream.core.consumer.TickConsumerGroup;
+import com.stockstream.core.metrics.ConsumerMetrics;
 import com.stockstream.dashboard.store.CandleStore;
 import com.stockstream.dashboard.store.TickStore;
 import com.stockstream.dashboard.websocket.StockWebSocketHandler;
@@ -24,16 +26,21 @@ public class ConsumerService {
     private final TickStore tickStore;
     private final CandleStore candleStore;
     private final StockWebSocketHandler wsHandler;
+    private final CsvMetricsWriter csvWriter;
     private ExecutorService executor;
 
-    private TickConsumer tickConsumer;
+    private TickConsumerGroup tickConsumerGroup;
+    private NewsConsumer newsConsumer;
+    private ConsumerMetrics tickMetrics;
+    private ConsumerMetrics newsMetrics;
     private final List<CandleConsumer> candleConsumers = new ArrayList<>();
 
-    public ConsumerService(TickStore tickStore,
-                           CandleStore candleStore, StockWebSocketHandler wsHandler) {
+    public ConsumerService(TickStore tickStore, NewsStore newsStore,
+                           CandleStore candleStore, StockWebSocketHandler wsHandler, CsvMetricsWriter csvWriter) {
         this.tickStore = tickStore;
         this.candleStore = candleStore;
         this.wsHandler = wsHandler;
+        this.csvWriter = csvWriter;
     }
 
     @PostConstruct
@@ -41,16 +48,31 @@ public class ConsumerService {
         ConsumerConfig config = ConfigLoader.load();
         Subscription tickSub = ConfigLoader.loadTickSubscription();
         List<Subscription> candleSubs = ConfigLoader.loadCandleSubscriptions();
+        int tickPartitions = ConfigLoader.loadTickPartitionCount();
 
+        // Tick group manages its own executor internally
         executor = Executors.newFixedThreadPool(1 + candleSubs.size());
 
-        tickConsumer = new TickConsumer(config, tickSub.topic(), tickSub.groupId(), tick -> {
-            tickStore.add(tick);
-            wsHandler.broadcast("tick", tick);
-            System.out.printf("[TICK] %s | price=%.2f | vol=%d | lag=%dms%n",
-              tick.securityName(), tick.price(), tick.volume(), tick.lagMs());
+        // Handle Ticks (parallel: 1 consumer per partition)
+        tickConsumerGroup = new TickConsumerGroup(
+                config, tickSub.topic(), tickSub.groupId(), tickPartitions,
+                tick -> {
+                    tickStore.add(tick);
+                    csvWriter.writeTickMetrics(tick, System.currentTimeMillis());
+                    wsHandler.broadcast("tick", tick);
+                    System.out.printf("[TICK] %s | price=%.2f | vol=%d | lag=%dms%n",
+                            tick.securityName(), tick.price(), tick.volume(), tick.lagMs());
+                },
+                null
+        );
+
+        // Handle News
+        newsConsumer = new NewsConsumer(config, newsSub.topic(), newsSub.groupId(), event -> {
+            newsStore.add(event);
+            wsHandler.broadcast("news", event);
         });
 
+        // Handle candles
         for (Subscription sub : candleSubs) {
             CandleConsumer cc = new CandleConsumer(config, sub.topic(), sub.groupId(), candle -> {
                 candleStore.add(candle);
@@ -59,7 +81,11 @@ public class ConsumerService {
             candleConsumers.add(cc);
         }
 
-        executor.submit(tickConsumer::start);
+        // Get metrics instances
+        tickMetrics = tickConsumerGroup.getMetrics();
+        newsMetrics = newsConsumer.getMetrics();
+
+        executor.submit(newsConsumer::start);
         for (CandleConsumer cc : candleConsumers) {
             executor.submit(cc::start);
         }
@@ -67,7 +93,8 @@ public class ConsumerService {
 
     @PreDestroy
     public void stop() {
-        if (tickConsumer != null) tickConsumer.shutdown();
+        if (tickConsumerGroup != null) tickConsumerGroup.close();
+        if (newsConsumer != null) newsConsumer.shutdown();
         for (CandleConsumer cc : candleConsumers) cc.shutdown();
         if (executor != null) {
             executor.shutdown();
@@ -78,4 +105,13 @@ public class ConsumerService {
             }
         }
     }
+
+    public ConsumerMetrics getTickMetrics() {
+        return tickMetrics;
+    }
+
+    public ConsumerMetrics getNewsMetrics() {
+        return newsMetrics;
+    }
+
 }

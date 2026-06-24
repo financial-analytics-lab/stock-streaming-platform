@@ -2,18 +2,22 @@ package com.stockstream.dashboard.api;
 
 import com.stockstream.core.model.Tick;
 import com.stockstream.dashboard.store.TickStore;
+import com.stockstream.dashboard.service.TickProvider;
 import org.springframework.web.bind.annotation.*;
-
+ 
+import java.time.Instant;
 import java.util.*;
-
+ 
 @RestController
 @RequestMapping("/api")
 public class TickController {
-
+ 
     private final TickStore tickStore;
-
-    public TickController(TickStore tickStore) {
+    private final TickProvider tickProvider;
+ 
+    public TickController(TickStore tickStore, TickProvider tickProvider) {
         this.tickStore = tickStore;
+        this.tickProvider = tickProvider;
     }
 
     @GetMapping("/symbols")
@@ -26,6 +30,9 @@ public class TickController {
         return tickStore.getLatestPerSymbol().values();
     }
 
+    @GetMapping("/ticks/latest/{symbol}")
+    public Tick getLatestOfSymbol(@PathVariable String symbol) { return tickStore.getLatest(symbol); }
+
     @GetMapping("/ticks/{symbol}/history")
     public List<Tick> getHistory(
             @PathVariable String symbol,
@@ -33,7 +40,17 @@ public class TickController {
         return tickStore.getHistory(symbol, Math.min(limit, 500));
     }
 
-    @GetMapping("/metrics")
+    @GetMapping("/ticks/{symbol}/range")
+    public List<Tick> getRangeHistorical(
+            @PathVariable String symbol,
+            @RequestParam String start,
+            @RequestParam String end) {
+        Instant startTime = Instant.parse(start);
+        Instant endTime = Instant.parse(end);
+        return tickProvider.getHistoricalTicks(symbol, startTime, endTime);
+    }
+ 
+    @GetMapping("/ticks/metrics")
     public Map<String, Object> getMetrics() {
         return Map.of(
                 "totalReceived", tickStore.getTotalReceived(),

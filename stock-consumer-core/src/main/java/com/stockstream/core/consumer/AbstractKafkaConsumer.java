@@ -3,6 +3,8 @@ package com.stockstream.core.consumer;
 import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.exception.DeserializationException;
 import com.stockstream.core.logging.LoggerFactory;
+import com.stockstream.core.metrics.ConsumerMetrics;
+import com.stockstream.core.metrics.MetricsRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -29,6 +31,7 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
     private final String groupId;
     private final MessageDeserializer<T> deserializer;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final ConsumerMetrics metrics;
     private KafkaConsumer<String, byte[]> consumer;
 
     protected AbstractKafkaConsumer(ConsumerConfig config,
@@ -43,6 +46,10 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
         this.topic = topic;
         this.groupId = groupId;
         this.deserializer = deserializer;
+
+        // Initialize metrics for this consumer
+        String consumerName = String.format("%s-%s", topic, groupId);
+        this.metrics = MetricsRegistry.getInstance().getOrCreateMetrics(consumerName);
     }
 
     /** Process a single deserialized message. Called once per record. */
@@ -65,11 +72,33 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
         log.log(Level.SEVERE, "Error processing message: " + message, e);
     }
 
+    /**
+     * Override to supply the timestamp from the actual message payload for latency metric tracking.
+     * Defaults to the Kafka Record timestamp.
+     */
+    protected long getEventTimestamp(T message, ConsumerRecord<String, byte[]> record) {
+        return record.timestamp();
+    }
+
     /** Called once before the poll loop starts, after subscription. */
     protected void onStart() {}
 
     /** Called once after the poll loop exits, before consumer.close(). */
     protected void onStop() {}
+
+    /** Exposes topic to subclasses that override subscription behavior. */
+    protected final String topic() {
+        return topic;
+    }
+
+    /**
+     * Subscription hook.
+     * Default behavior: group subscription to the topic.
+     * Subclasses can override to use explicit partition assignment.
+     */
+    protected void subscribeToSource(KafkaConsumer<String, byte[]> consumer) {
+        consumer.subscribe(Collections.singletonList(topic));
+    }
 
     // ---- Lifecycle ----
 
@@ -82,7 +111,7 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
         Properties props = config.toKafkaProperties();
         props.put(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG, groupId);
         consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(Collections.singletonList(topic));
+        subscribeToSource(consumer);
         log.info("Subscribed to topic '" + topic + "' with group '" + groupId + "'");
 
         onStart();
@@ -92,6 +121,7 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
                 ConsumerRecords<String, byte[]> records = consumer.poll(config.pollTimeout());
 
                 for (ConsumerRecord<String, byte[]> record : records) {
+
                     T message;
                     try {
                         message = deserializer.deserialize(record.value());
@@ -101,7 +131,18 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
                     }
 
                     try {
+                        // Calculate end-to-end latency (time from record timestamp to now)
+                        long eventTimestamp = getEventTimestamp(message, record);
+                        long endToEndLatency = System.currentTimeMillis() - eventTimestamp;
+
+                        // Process the message and measure processing time
+                        long processStartTime = System.currentTimeMillis();
                         process(message);
+                        long processingTime = System.currentTimeMillis() - processStartTime;
+
+                        // Record metrics
+                        metrics.recordMessage(processingTime, endToEndLatency);
+
                     } catch (Exception e) {
                         onProcessingError(message, e);
                     }
@@ -144,5 +185,13 @@ public abstract class AbstractKafkaConsumer<T> implements AutoCloseable {
 
     public boolean isRunning() {
         return running.get();
+    }
+
+    public ConsumerMetrics getMetrics() {
+        return metrics;
+    }
+
+    public String getConsumerName() {
+        return metrics.getConsumerName();
     }
 }

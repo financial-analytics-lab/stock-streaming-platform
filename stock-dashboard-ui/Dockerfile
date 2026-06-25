@@ -27,9 +27,8 @@ COPY --from=build /app/dist .
 # nginx config template — BACKEND_URL and PORT are substituted at startup
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
-# Entrypoint runs envsubst then starts nginx
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+# Entrypoint: substitute only PORT and BACKEND_URL, then start nginx
+RUN printf '#!/bin/sh\nset -e\nexport PORT="${PORT:-3000}"\n[ -z "$BACKEND_URL" ] && echo "ERROR: BACKEND_URL is required" && exit 1\nenvsubst '"'"'${PORT} ${BACKEND_URL}'"'"' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf\nexec nginx -g '"'"'daemon off;'"'"'\n' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 # Railway sets PORT at runtime; 3000 is the local default
 EXPOSE 3000

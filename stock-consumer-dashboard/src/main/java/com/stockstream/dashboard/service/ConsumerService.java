@@ -4,7 +4,6 @@ import com.stockstream.core.config.ConfigLoader;
 import com.stockstream.core.config.ConsumerConfig;
 import com.stockstream.core.config.Subscription;
 import com.stockstream.core.consumer.CandleConsumer;
-import com.stockstream.core.consumer.NewsConsumer;
 import com.stockstream.core.consumer.TickConsumerGroup;
 import com.stockstream.core.metrics.ConsumerMetrics;
 import com.stockstream.dashboard.store.CandleStore;
@@ -30,12 +29,10 @@ public class ConsumerService {
     private ExecutorService executor;
 
     private TickConsumerGroup tickConsumerGroup;
-    private NewsConsumer newsConsumer;
     private ConsumerMetrics tickMetrics;
-    private ConsumerMetrics newsMetrics;
     private final List<CandleConsumer> candleConsumers = new ArrayList<>();
 
-    public ConsumerService(TickStore tickStore, NewsStore newsStore,
+    public ConsumerService(TickStore tickStore,
                            CandleStore candleStore, StockWebSocketHandler wsHandler, CsvMetricsWriter csvWriter) {
         this.tickStore = tickStore;
         this.candleStore = candleStore;
@@ -50,8 +47,7 @@ public class ConsumerService {
         List<Subscription> candleSubs = ConfigLoader.loadCandleSubscriptions();
         int tickPartitions = ConfigLoader.loadTickPartitionCount();
 
-        // Tick group manages its own executor internally
-        executor = Executors.newFixedThreadPool(1 + candleSubs.size());
+        executor = Executors.newFixedThreadPool(candleSubs.size());
 
         // Handle Ticks (parallel: 1 consumer per partition)
         tickConsumerGroup = new TickConsumerGroup(
@@ -66,12 +62,6 @@ public class ConsumerService {
                 null
         );
 
-        // Handle News
-        newsConsumer = new NewsConsumer(config, newsSub.topic(), newsSub.groupId(), event -> {
-            newsStore.add(event);
-            wsHandler.broadcast("news", event);
-        });
-
         // Handle candles
         for (Subscription sub : candleSubs) {
             CandleConsumer cc = new CandleConsumer(config, sub.topic(), sub.groupId(), candle -> {
@@ -81,11 +71,8 @@ public class ConsumerService {
             candleConsumers.add(cc);
         }
 
-        // Get metrics instances
         tickMetrics = tickConsumerGroup.getMetrics();
-        newsMetrics = newsConsumer.getMetrics();
 
-        executor.submit(newsConsumer::start);
         for (CandleConsumer cc : candleConsumers) {
             executor.submit(cc::start);
         }
@@ -94,7 +81,6 @@ public class ConsumerService {
     @PreDestroy
     public void stop() {
         if (tickConsumerGroup != null) tickConsumerGroup.close();
-        if (newsConsumer != null) newsConsumer.shutdown();
         for (CandleConsumer cc : candleConsumers) cc.shutdown();
         if (executor != null) {
             executor.shutdown();
@@ -109,9 +95,4 @@ public class ConsumerService {
     public ConsumerMetrics getTickMetrics() {
         return tickMetrics;
     }
-
-    public ConsumerMetrics getNewsMetrics() {
-        return newsMetrics;
-    }
-
 }

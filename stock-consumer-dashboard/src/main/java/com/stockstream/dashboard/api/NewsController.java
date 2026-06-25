@@ -37,17 +37,15 @@ public class NewsController {
         Instant cutoff = resolveAsOf(asOf);
 
         List<NewsGroup> groups = new ArrayList<>();
-        if (!cutoff.equals(Instant.EPOCH)) {
-            for (SymbolBundle bundle : loader.getBundles()) {
-                List<Article> articles = bundle.sliceAsOf(cutoff).stream()
-                        .map(NewsController::slim)
-                        .toList();
-                if (!articles.isEmpty()) {
-                    groups.add(new NewsGroup(bundle.symbol(), bundle.company(), articles));
-                }
+        for (SymbolBundle bundle : loader.getBundles()) {
+            List<Article> articles = bundle.sliceAsOf(cutoff).stream()
+                    .map(NewsController::slim)
+                    .toList();
+            if (!articles.isEmpty()) {
+                groups.add(new NewsGroup(bundle.symbol(), bundle.company(), articles));
             }
-            groups.sort(Comparator.comparing(NewsGroup::symbol));
         }
+        groups.sort(Comparator.comparing(NewsGroup::symbol));
 
         return new NewsResponse(cutoff, groups);
     }
@@ -64,7 +62,7 @@ public class NewsController {
             try { return Instant.parse(explicit); } catch (Exception ignored) {}
         }
         Optional<Instant> simNow = tickStore.currentSimulationTime();
-        return simNow.orElse(Instant.EPOCH);
+        return simNow.orElseGet(Instant::now);
     }
 
     private static Article slim(Article a) {

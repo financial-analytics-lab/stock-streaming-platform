@@ -105,11 +105,8 @@ public class TickStore {
     /** Max event-time across the latest tick of each symbol — the current simulated "now". */
     public Optional<Instant> currentSimulationTime() {
         Instant max = null;
-        for (ArrayDeque<Tick> deque : store.values()) {
-            Tick last;
-            synchronized (deque) {
-                last = deque.peekLast();
-            }
+        for (SymbolBuffer buf : store.values()) {
+            Tick last = buf.getLatest();
             if (last == null) continue;
             Instant t = last.timestamp();
             if (t != null && (max == null || t.isAfter(max))) max = t;

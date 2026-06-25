@@ -1,0 +1,32 @@
+.git
+.github
+.idea
+*.iml
+*.ipr
+*.iws
+
+# Java modules — not needed for frontend build
+stock-consumer-core/
+stock-consumer-dashboard/
+stock-candle-processor/
+publisher-service/
+publisher-spark/
+**/target/
+
+# UI build artifacts and local deps — rebuilt inside the container
+stock-dashboard-ui/node_modules/
+stock-dashboard-ui/dist/
+stock-dashboard-ui/.env
+stock-dashboard-ui/.env.*
+
+# Large data files
+**/*.csv
+**/*.parquet
+**/*.bin
+**/*.pdf
+**/data/
+**/.dist/
+
+*.log
+*.tmp
+examples/

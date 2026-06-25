@@ -1,0 +1,36 @@
+# ── Stage 1: Build ──────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /build
+
+# Copy POMs first so dependency layer is cached separately from source
+COPY pom.xml .
+COPY stock-consumer-core/pom.xml       stock-consumer-core/
+COPY stock-consumer-dashboard/pom.xml  stock-consumer-dashboard/
+COPY stock-candle-processor/pom.xml    stock-candle-processor/
+RUN mvn dependency:go-offline -B --no-transfer-progress
+
+# Build all modules
+COPY stock-consumer-core/src       stock-consumer-core/src
+COPY stock-consumer-dashboard/src  stock-consumer-dashboard/src
+COPY stock-candle-processor/src    stock-candle-processor/src
+RUN mvn package -DskipTests -B --no-transfer-progress
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+COPY --from=build /build/stock-consumer-dashboard/target/stock-consumer-dashboard-1.0.0-SNAPSHOT.jar /app/dashboard.jar
+COPY --from=build /build/stock-candle-processor/target/stock-candle-processor-1.0.0-SNAPSHOT.jar     /app/candle-processor.jar
+COPY start-backend.sh /app/start-backend.sh
+RUN chmod +x /app/start-backend.sh
+
+RUN mkdir -p /data && chown appuser:appgroup /data
+
+USER appuser
+
+# Railway overrides PORT at runtime; 8085 is the local default
+EXPOSE 8085
+
+ENTRYPOINT ["/app/start-backend.sh"]

@@ -1,0 +1,29 @@
+.git
+.github
+.idea
+*.iml
+*.ipr
+*.iws
+
+# Maven build outputs — re-built inside the container
+**/target/
+
+# UI — not needed for backend image
+stock-dashboard-ui/
+
+# Publisher service — separate deployment
+publisher-service/
+publisher-spark/
+
+# Large data files
+**/*.csv
+**/*.parquet
+**/*.bin
+**/*.pdf
+**/data/
+**/.dist/
+
+# Dev scratch files
+*.log
+*.tmp
+examples/

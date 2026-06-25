@@ -1,5 +1,6 @@
 package com.stockstream.dashboard.service.news;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stockstream.dashboard.model.news.Article;
@@ -9,7 +10,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -20,133 +23,133 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
 
 @Component
 public class NewsLoader {
 
     private static final Logger LOG = LoggerFactory.getLogger(NewsLoader.class);
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final Set<String> SKIP_FILES = Set.of("all_news_by_date.json", "combined_news.md");
 
     private final ObjectMapper mapper;
-    private final Path dataPath;
+    private final Path dataFile;
 
     private final ConcurrentHashMap<String, SymbolBundle> bundles = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Article> byId = new ConcurrentHashMap<>();
-    private final Map<Path, Long> lastSeenMtimes = new HashMap<>();
+    private volatile long lastSeenMtime = -1;
     private volatile boolean loadedOnce = false;
     private final Object reloadLock = new Object();
 
     public NewsLoader(ObjectMapper mapper,
-                      @Value("${news.scraping.data-path}") String dataPathProp) {
+                      @Value("${news.data.file:/mnt/all_news_by_date.json}") String dataFileProp) {
         this.mapper = mapper;
-        this.dataPath = Paths.get(dataPathProp).toAbsolutePath().normalize();
+        this.dataFile = Paths.get(dataFileProp).toAbsolutePath().normalize();
     }
 
-    /** Returns all cached symbol bundles. Triggers a reload-if-changed scan. */
     public Collection<SymbolBundle> getBundles() {
         reloadIfChanged();
         return bundles.values();
     }
 
-    /** Look up a single article by its stable id (full content, including body + raw). */
     public Optional<Article> findById(String id) {
         reloadIfChanged();
         return Optional.ofNullable(byId.get(id));
     }
 
-    /** Re-scan the data directory if any file's mtime changed (or first call). Safe to invoke per-request. */
     public void reloadIfChanged() {
         synchronized (reloadLock) {
-            if (!Files.isDirectory(dataPath)) {
+            if (!Files.isRegularFile(dataFile)) {
                 if (!loadedOnce) {
-                    LOG.warn("news.scraping.data-path does not exist: {}", dataPath);
+                    LOG.warn("news.data.file not found: {}", dataFile);
                     loadedOnce = true;
                 }
                 return;
             }
 
-            Map<Path, Long> current = new HashMap<>();
-            try (Stream<Path> stream = Files.list(dataPath)) {
-                stream.filter(this::isCandidateFile).forEach(p -> {
-                    try {
-                        current.put(p, Files.readAttributes(p, BasicFileAttributes.class).lastModifiedTime().toMillis());
-                    } catch (IOException e) {
-                        LOG.warn("Cannot stat {}: {}", p, e.toString());
-                    }
-                });
+            long mtime;
+            try {
+                mtime = Files.readAttributes(dataFile, BasicFileAttributes.class)
+                        .lastModifiedTime().toMillis();
             } catch (IOException e) {
-                LOG.warn("Cannot list {}: {}", dataPath, e.toString());
+                LOG.warn("Cannot stat {}: {}", dataFile, e.toString());
                 return;
             }
 
-            if (loadedOnce && current.equals(lastSeenMtimes)) return;
+            if (loadedOnce && mtime == lastSeenMtime) return;
 
-            ConcurrentHashMap<String, SymbolBundle> nextBundles = new ConcurrentHashMap<>();
-            ConcurrentHashMap<String, Article> nextById = new ConcurrentHashMap<>();
-            for (Path file : current.keySet()) {
-                try {
-                    SymbolBundle bundle = parseFile(file);
-                    if (bundle != null) {
-                        nextBundles.put(bundle.symbol(), bundle);
-                        for (Article a : bundle.articles()) nextById.put(a.id(), a);
-                    }
-                } catch (IOException e) {
-                    LOG.warn("Failed to parse {}: {}", file, e.toString());
-                }
+            try {
+                load();
+                lastSeenMtime = mtime;
+                loadedOnce = true;
+            } catch (IOException e) {
+                LOG.error("Failed to parse {}: {}", dataFile, e.toString());
             }
-            bundles.clear();
-            bundles.putAll(nextBundles);
-            byId.clear();
-            byId.putAll(nextById);
-            lastSeenMtimes.clear();
-            lastSeenMtimes.putAll(current);
-            loadedOnce = true;
-            LOG.info("Loaded {} articles across {} symbols from {}",
-                    byId.size(), bundles.size(), dataPath);
         }
     }
 
-    private boolean isCandidateFile(Path p) {
-        if (!Files.isRegularFile(p)) return false;
-        String name = p.getFileName().toString();
-        if (SKIP_FILES.contains(name)) return false;
-        return name.endsWith(".json");
-    }
-
-    private SymbolBundle parseFile(Path file) throws IOException {
-        JsonNode root = mapper.readTree(file.toFile());
-        JsonNode meta = root.path("metadata");
-        String symbol = meta.path("symbol").asText(file.getFileName().toString().replace(".json", ""));
-        String company = meta.path("company").asText("");
-
-        JsonNode articlesNode = root.path("articles");
-        if (!articlesNode.isArray()) return null;
-
-        List<Article> articles = new ArrayList<>(articlesNode.size());
-        for (JsonNode a : articlesNode) {
-            Article article = toArticle(symbol, a);
-            if (article != null) articles.add(article);
+    private void load() throws IOException {
+        JsonNode root = mapper.readTree(dataFile.toFile());
+        JsonNode byDate = root.path("by_date");
+        if (!byDate.isObject()) {
+            LOG.warn("No 'by_date' object in {}", dataFile);
+            return;
         }
-        articles.sort(Comparator.comparing(Article::publishedAt));
-        return new SymbolBundle(symbol.toUpperCase(), company, List.copyOf(articles));
+
+        Map<String, List<Article>> bySymbol = new LinkedHashMap<>();
+        Map<String, String> symbolToCompany = new HashMap<>();
+        Map<String, Article> nextById = new HashMap<>();
+
+        Iterator<Map.Entry<String, JsonNode>> dateIter = byDate.fields();
+        while (dateIter.hasNext()) {
+            JsonNode articles = dateIter.next().getValue();
+            if (!articles.isArray()) continue;
+
+            for (JsonNode a : articles) {
+                Article article = toArticle(a);
+                if (article == null) continue;
+
+                String sym = article.symbol();
+                bySymbol.computeIfAbsent(sym, k -> new ArrayList<>()).add(article);
+                symbolToCompany.putIfAbsent(sym, a.path("company").asText(""));
+                nextById.put(article.id(), article);
+            }
+        }
+
+        ConcurrentHashMap<String, SymbolBundle> nextBundles = new ConcurrentHashMap<>();
+        for (Map.Entry<String, List<Article>> e : bySymbol.entrySet()) {
+            List<Article> sorted = e.getValue();
+            sorted.sort(Comparator.comparing(Article::publishedAt));
+            nextBundles.put(e.getKey(), new SymbolBundle(
+                    e.getKey(),
+                    symbolToCompany.getOrDefault(e.getKey(), ""),
+                    List.copyOf(sorted)
+            ));
+        }
+
+        bundles.clear();
+        bundles.putAll(nextBundles);
+        byId.clear();
+        byId.putAll(nextById);
+        LOG.info("Loaded {} articles across {} symbols from {}",
+                nextById.size(), nextBundles.size(), dataFile);
     }
 
-    private Article toArticle(String symbol, JsonNode a) {
+    private Article toArticle(JsonNode a) {
         Instant publishedAt = parsePublishedAt(a);
         if (publishedAt == null) return null;
 
-        String source = a.path("_source").asText("");
-        String title = a.path("title").asText("");
+        String symbol = a.path("symbol").asText("").toUpperCase();
+        if (symbol.isBlank()) return null;
+
+        String source = a.path("_source").asText(a.path("source").asText(""));
         String rawId = a.path("id").asText("");
+        String title = a.path("title").asText("");
         String id = buildId(source, rawId, symbol, a.path("datetime").asText(""), title);
 
-        Map<String, Object> raw = mapper.convertValue(a, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        Map<String, Object> raw = mapper.convertValue(a, new TypeReference<>() {});
 
         return new Article(
                 id,
-                symbol.toUpperCase(),
+                symbol,
                 source,
                 publishedAt,
                 title,
@@ -167,10 +170,15 @@ public class NewsLoader {
             } catch (Exception ignored) {}
         }
         String date = a.path("date").asText("");
+        String time = a.path("time").asText("00:00:00");
         if (!date.isBlank()) {
             try {
-                return LocalDate.parse(date).atStartOfDay().toInstant(ZoneOffset.UTC);
-            } catch (Exception ignored) {}
+                return LocalDateTime.parse(date + " " + time, DATETIME_FMT).toInstant(ZoneOffset.UTC);
+            } catch (Exception ignored) {
+                try {
+                    return LocalDate.parse(date).atStartOfDay().toInstant(ZoneOffset.UTC);
+                } catch (Exception ignored2) {}
+            }
         }
         return null;
     }
@@ -193,10 +201,8 @@ public class NewsLoader {
         }
     }
 
-    /** Immutable per-symbol cached bundle. Articles are sorted ascending by publishedAt. */
     public record SymbolBundle(String symbol, String company, List<Article> articles) {
 
-        /** Returns the prefix of articles with publishedAt <= asOf, newest-first. */
         public List<Article> sliceAsOf(Instant asOf) {
             int idx = upperBound(articles, asOf);
             if (idx == 0) return List.of();
@@ -205,7 +211,6 @@ public class NewsLoader {
             return slice;
         }
 
-        /** Returns the count of articles with publishedAt <= asOf, i.e. the size of `sliceAsOf`. */
         private static int upperBound(List<Article> sorted, Instant asOf) {
             int lo = 0, hi = sorted.size();
             while (lo < hi) {

@@ -28,8 +28,8 @@ public class NewsController {
 
     /**
      * Articles grouped by symbol, filtered to those published at or before the
-     * current simulation timestamp. Returns a slim view (no body, no raw) so the
-     * payload stays small; fetch full content per article via {@link #getArticle}.
+     * current simulation timestamp. Slim view (no body/raw) — fetch full content
+     * per article via {@link #getArticle}.
      */
     @GetMapping
     public NewsResponse getNews(@RequestParam(required = false) String asOf) {
@@ -45,13 +45,12 @@ public class NewsController {
                     groups.add(new NewsGroup(bundle.symbol(), bundle.company(), articles));
                 }
             }
-            groups.sort((a, b) -> a.symbol().compareTo(b.symbol()));
+            groups.sort(Comparator.comparing(NewsGroup::symbol));
         }
 
         return new NewsResponse(cutoff, groups);
     }
 
-    /** Full article (including body + raw) for the future sentiment action. */
     @GetMapping("/{id}")
     public ResponseEntity<Article> getArticle(@PathVariable String id) {
         return loader.findById(id)
@@ -61,11 +60,7 @@ public class NewsController {
 
     private Instant resolveAsOf(String explicit) {
         if (explicit != null && !explicit.isBlank()) {
-            try {
-                return Instant.parse(explicit);
-            } catch (Exception ignored) {
-                // fall through to simulation time
-            }
+            try { return Instant.parse(explicit); } catch (Exception ignored) {}
         }
         Optional<Instant> simNow = tickStore.currentSimulationTime();
         return simNow.orElse(Instant.EPOCH);
@@ -74,10 +69,7 @@ public class NewsController {
     private static Article slim(Article a) {
         return new Article(
                 a.id(), a.symbol(), a.source(), a.publishedAt(),
-                a.title(), a.teaser(),
-                null,
-                a.url(), a.imageUrl(), a.section(),
-                null
+                a.title(), a.teaser(), null, a.url(), a.imageUrl(), a.section(), null
         );
     }
 }

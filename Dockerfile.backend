@@ -26,7 +26,11 @@ COPY --from=build /build/stock-candle-processor/target/stock-candle-processor-1.
 COPY start-backend.sh /app/start-backend.sh
 RUN chmod +x /app/start-backend.sh
 
-RUN mkdir -p /data && chown appuser:appgroup /data
+# News data baked into the image; override path via NEWS_DATA_FILE env var if mounting a volume
+COPY stock-consumer-dashboard/all_news_by_date.json /mnt/all_news_by_date.json
+
+RUN mkdir -p /data && chown appuser:appgroup /data && \
+    chown appuser:appgroup /mnt/all_news_by_date.json
 
 USER appuser
 

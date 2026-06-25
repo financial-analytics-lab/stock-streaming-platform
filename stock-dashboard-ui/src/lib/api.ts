@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { Tick, Article, NewsResponse, MetricsData, Candle } from '../types'
 
-const client = axios.create({ baseURL: '/api' })
+const client = axios.create({ baseURL: `${import.meta.env.VITE_BACKEND_URL ?? ''}/api` })
 
 export interface CandleHistoryResponse {
   history: Candle[]

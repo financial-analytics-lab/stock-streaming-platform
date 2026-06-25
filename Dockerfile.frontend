@@ -6,23 +6,24 @@ COPY stock-dashboard-ui/package.json ./
 RUN npm install --ignore-scripts
 
 COPY stock-dashboard-ui/ .
+
+# Baked into the JS bundle at build time — set these as Railway build variables
+ARG VITE_BACKEND_URL
+ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
 ARG VITE_REASONING_AGENT_URL
 ENV VITE_REASONING_AGENT_URL=${VITE_REASONING_AGENT_URL}
+
 RUN npm run build
 
-# ── Stage 2: nginx ───────────────────────────────────────────────────────────
-FROM nginx:1.27-alpine
-WORKDIR /usr/share/nginx/html
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM node:20-alpine
+WORKDIR /app
 
-RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*
-
-COPY --from=build /app/dist .
-
-COPY stock-dashboard-ui/nginx.conf.template /etc/nginx/templates/default.conf.template
-
-# Entrypoint: substitute only PORT and BACKEND_URL, leaving nginx vars untouched
-RUN printf '#!/bin/sh\nset -e\nexport PORT="${PORT:-3000}"\n[ -z "$BACKEND_URL" ] && echo "ERROR: BACKEND_URL is required" && exit 1\nenvsubst '"'"'${PORT} ${BACKEND_URL}'"'"' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf\nexec nginx -g '"'"'daemon off;'"'"'\n' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
 
 EXPOSE 3000
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Railway sets PORT at runtime; vite preview serves dist/ with SPA fallback
+CMD ["sh", "-c", "npx vite preview --host --port ${PORT:-3000}"]

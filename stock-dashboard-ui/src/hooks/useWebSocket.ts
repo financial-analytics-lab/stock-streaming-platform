@@ -14,8 +14,9 @@ export function useWebSocket() {
 
     function connect() {
       if (!active) return
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`)
+      const backendUrl = import.meta.env.VITE_BACKEND_URL ?? ''
+      const wsUrl = backendUrl.replace(/^https/, 'wss').replace(/^http/, 'ws') + '/ws/live'
+      const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => setConnected(true)

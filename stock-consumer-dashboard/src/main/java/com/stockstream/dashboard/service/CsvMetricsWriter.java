@@ -2,11 +2,13 @@ package com.stockstream.dashboard.service;
 
 import com.stockstream.core.model.Tick;
 import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.logging.Level;
@@ -18,10 +20,12 @@ public class CsvMetricsWriter {
     private static final Logger log = Logger.getLogger(CsvMetricsWriter.class.getName());
     private BufferedWriter writer;
 
-    public CsvMetricsWriter() {
+    public CsvMetricsWriter(@Value("${storage.base-dir:/data}") String baseDir) {
         try {
-            Path filePath = Paths.get("tick_metrics_2.csv");
-            boolean isNewFile = !filePath.toFile().exists();
+            Path dir = Paths.get(baseDir);
+            Files.createDirectories(dir);
+            Path filePath = dir.resolve("tick_metrics_2.csv");
+            boolean isNewFile = !Files.exists(filePath);
 
             writer = new BufferedWriter(new FileWriter(filePath.toFile(), true));
             if (isNewFile) {

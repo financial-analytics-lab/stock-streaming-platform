@@ -19,8 +19,6 @@ RUN mvn package -DskipTests -B --no-transfer-progress
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-
 COPY --from=build /build/stock-consumer-dashboard/target/stock-consumer-dashboard-1.0.0-SNAPSHOT.jar /app/dashboard.jar
 COPY --from=build /build/stock-candle-processor/target/stock-candle-processor-1.0.0-SNAPSHOT.jar     /app/candle-processor.jar
 COPY start-backend.sh /app/start-backend.sh
@@ -29,10 +27,6 @@ RUN chmod +x /app/start-backend.sh
 # News data baked into the image under /app/news/; override via NEWS_DATA_FILE env var
 RUN mkdir -p /app/news /data
 COPY stock-consumer-dashboard/all_news_by_date.json /app/news/all_news_by_date.json
-
-RUN chown -R appuser:appgroup /app/news /data
-
-USER appuser
 
 # Railway overrides PORT at runtime; 8085 is the local default
 EXPOSE 8085

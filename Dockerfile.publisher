@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────
+# Stage 1 – Build fat JAR
+# ─────────────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-11 AS build
+
+WORKDIR /build
+
+# Dependency layer (cache-friendly)
+COPY publisher-service/publisher-service/pom.xml .
+RUN mvn dependency:go-offline -B --no-transfer-progress
+
+COPY publisher-service/publisher-service/src ./src
+RUN mvn package -DskipTests -B --no-transfer-progress
+
+# ─────────────────────────────────────────────────────────────────
+# Stage 2 – Runtime
+# ─────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:11-jre-jammy
+
+WORKDIR /app
+
+# Application JAR
+COPY --from=build /build/target/publisher-service-1.0.0.jar /app/publisher-service.jar
+
+# Seed data — baked into the image so the entrypoint can populate
+# the Railway Volume on first start without any manual upload step.
+# Only .csv files; Hadoop .crc sidecars are not read by the publisher.
+COPY publisher-service/data/shards_csv /app/shards-seed/shards_csv
+RUN find /app/shards-seed -name "*.crc" -delete
+
+COPY publisher-service/data/security_mapping.json /app/shards-seed/security_mapping.json
+
+# Entrypoint
+COPY start-publisher.sh /app/start-publisher.sh
+RUN chmod +x /app/start-publisher.sh
+
+# /data is the Railway Volume mount point
+RUN mkdir -p /data
+
+ENTRYPOINT ["/app/start-publisher.sh"]

@@ -1,0 +1,17 @@
+flowchart LR
+    CSV[("CSV Shards\non Disk")]
+
+    subgraph PUB["Publisher Service"]
+        CFG["AppConfig\nYAML"]
+        SM["SessionManager\nLoad & Rebase"]
+        DS["DeterministicScheduler\nReplay Loop"]
+        KP["KafkaPublisher\nAsync Producer"]
+    end
+
+    KAFKA[("Kafka Topic\nstock-ticks")]
+
+    CFG --> SM
+    CSV --> SM
+    SM -->|"TradeEvents\n(sorted by dueTime)"| DS
+    DS -->|"dispatch on schedule"| KP
+    KP --> KAFKA

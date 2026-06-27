@@ -1,0 +1,37 @@
+# This file scopes the build context for Dockerfile.publisher.
+# Docker 23+ picks this up automatically when building with -f Dockerfile.publisher.
+# It overrides .dockerignore for the publisher build.
+
+.git
+.github
+.idea
+*.iml
+*.ipr
+*.iws
+*.log
+*.tmp
+
+# Build outputs — rebuilt inside the container
+**/target/
+
+# Other modules not needed for the publisher build
+stock-dashboard-ui/
+stock-consumer-core/
+stock-consumer-dashboard/
+stock-candle-processor/
+examples/
+
+# Publisher-spark module (Spark sharding job, not the runtime service)
+publisher-service/publisher-spark/
+
+# Large raw trade file — only the sharded CSVs are needed
+publisher-service/data/TRADES_20250101_20251231_EGX30_AUG.csv
+publisher-service/TRADES_20250101_20251231_EGX30_AUG.csv
+
+# Hadoop CRC sidecars — excluded at the Dockerfile level too, but
+# filtering here avoids sending them to the daemon at all.
+publisher-service/data/shards_csv/**/.part-*.crc
+
+# Notebooks and PDFs
+**/*.ipynb
+**/*.pdf

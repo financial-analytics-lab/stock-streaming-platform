@@ -11,17 +11,33 @@
 # UI — not needed for backend image
 stock-dashboard-ui/
 
-# Publisher service — separate deployment
-publisher-service/
+# Unrelated publisher-spark module
 publisher-spark/
+publisher-service/publisher-spark/
 
-# Large data files
-**/*.csv
+# Large data files — exclude globally first, then re-open what the publisher build needs.
+# Order matters: last matching rule wins, so the !publisher-service/data/ negation must
+# come AFTER **/data/ to override it.
 **/*.parquet
 **/*.bin
-**/*.pdf
-**/data/
 **/.dist/
+**/data/
+# Re-include publisher-service/data so Dockerfile.publisher can COPY the shards.
+!publisher-service/data/
+# Within that directory, exclude only the files we don't want in any image:
+publisher-service/data/TRADES_20250101_20251231_EGX30_AUG.csv
+publisher-service/data/shards_csv/**/.part-*.crc
+
+# Publisher housekeeping files not needed in the runtime image
+publisher-service/preprocessing.ipynb
+publisher-service/generate_test_shards.py
+publisher-service/publisher_service_refined_spec_latex.pdf
+publisher-service/publisher-architecture.mmd
+publisher-service/README.md
+publisher-service/CLAUDE.md
+publisher-service/docker-compose.yml
+publisher-service/security_mapping.json
+publisher-service/TRADES_20250101_20251231_EGX30_AUG.csv
 
 # Dev scratch files
 *.log

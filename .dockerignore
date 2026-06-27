@@ -15,16 +15,11 @@ stock-dashboard-ui/
 publisher-spark/
 publisher-service/publisher-spark/
 
-# Large data files — exclude globally first, then re-open what the publisher build needs.
-# Order matters: last matching rule wins, so the !publisher-service/data/ negation must
-# come AFTER **/data/ to override it.
 **/*.parquet
 **/*.bin
 **/.dist/
-**/data/
-# Re-include publisher-service/data so Dockerfile.publisher can COPY the shards.
-!publisher-service/data/
-# Within that directory, exclude only the files we don't want in any image:
+# Exclude the raw source file (780 MB) and Hadoop sidecars; shards_csv is kept
+# so Dockerfile.publisher can COPY it for Railway Volume seeding.
 publisher-service/data/TRADES_20250101_20251231_EGX30_AUG.csv
 publisher-service/data/shards_csv/**/.part-*.crc
 

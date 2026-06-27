@@ -9,21 +9,22 @@ if [ -z "${KAFKA_BOOTSTRAP_SERVERS:-}" ]; then
     exit 1
 fi
 
-# ── 2. Seed the Railway Volume on first start ──────────────────────────────────
-# The volume persists between restarts; skip copy if shards already exist.
-if [ ! -d "$DATA/shards_csv" ]; then
-    echo "[publisher] Volume is empty — seeding shards_csv from image layer..."
-    cp -r /app/shards-seed/shards_csv "$DATA/shards_csv"
-    CSV_COUNT=$(find "$DATA/shards_csv" -name "*.csv" | wc -l)
-    echo "[publisher] Seeded $CSV_COUNT CSV files into $DATA/shards_csv"
-else
-    CSV_COUNT=$(find "$DATA/shards_csv" -name "*.csv" | wc -l)
-    echo "[publisher] Volume already has $CSV_COUNT CSV files — skipping seed."
+ARTIFACT_PATH="${ARTIFACT_PATH:-$DATA/shards_csv}"
+
+if [ ! -d "$ARTIFACT_PATH" ]; then
+    echo "[publisher] ERROR: Shards directory not found at ARTIFACT_PATH=$ARTIFACT_PATH" >&2
+    echo "[publisher] Seed the Railway Volume with shards_csv before starting." >&2
+    exit 1
 fi
 
-if [ ! -f "$DATA/security_mapping.json" ]; then
-    cp /app/shards-seed/security_mapping.json "$DATA/security_mapping.json"
-    echo "[publisher] Seeded security_mapping.json"
+CSV_COUNT=$(find "$ARTIFACT_PATH" -name "*.csv" | wc -l)
+echo "[publisher] Found $CSV_COUNT CSV shard files at $ARTIFACT_PATH"
+
+# ── 2. security_mapping.json: prefer volume path, fall back to baked-in copy ──
+MAPPING_FILE="${MAPPING_FILE:-$DATA/security_mapping.json}"
+if [ ! -f "$MAPPING_FILE" ]; then
+    cp /app/security_mapping.json "$MAPPING_FILE"
+    echo "[publisher] Copied security_mapping.json from image to $MAPPING_FILE"
 fi
 
 mkdir -p "$DATA/metrics_output"
@@ -31,10 +32,9 @@ mkdir -p "$DATA/metrics_output"
 # ── 3. Generate config/application.yaml from env vars ─────────────────────────
 mkdir -p /app/config
 
-# Build YAML into a temp var so we can log it cleanly before writing.
 CONFIG="replay:
   horizon_start: \"${REPLAY_HORIZON_START:-2025-04-02T10:00:00Z}\"
-  artifact_path: \"$DATA/shards_csv\"
+  artifact_path: \"$ARTIFACT_PATH\"
   scale_policy: \"${REPLAY_SCALE_POLICY:-session_rebase}\""
 
 # Only emit single_session_date when explicitly set (blank → horizon mode).
@@ -58,7 +58,7 @@ scheduler:
   lag_threshold_warn_ms: ${SCHEDULER_LAG_THRESHOLD_WARN_MS:-1000}
   lag_threshold_fail_ms: ${SCHEDULER_LAG_THRESHOLD_FAIL_MS:-4000}
 symbols:
-  mapping_file: \"$DATA/security_mapping.json\"
+  mapping_file: \"$MAPPING_FILE\"
 metrics:
   output_dir: \"$DATA/metrics_output\""
 

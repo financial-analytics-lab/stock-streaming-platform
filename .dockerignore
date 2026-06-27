@@ -18,10 +18,10 @@ publisher-service/publisher-spark/
 **/*.parquet
 **/*.bin
 **/.dist/
-# Exclude the raw source file (780 MB) and Hadoop sidecars; shards_csv is kept
-# so Dockerfile.publisher can COPY it for Railway Volume seeding.
+# Shards live on the Railway Volume, not in the image — exclude the full dir.
+# security_mapping.json is still COPYed (tiny), so only the subpaths below are blocked.
+publisher-service/data/shards_csv/
 publisher-service/data/TRADES_20250101_20251231_EGX30_AUG.csv
-publisher-service/data/shards_csv/**/.part-*.crc
 
 # Publisher housekeeping files not needed in the runtime image
 publisher-service/preprocessing.ipynb

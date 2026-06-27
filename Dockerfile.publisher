@@ -19,18 +19,13 @@ FROM eclipse-temurin:11-jre-jammy
 
 WORKDIR /app
 
-# Application JAR
 COPY --from=build /build/target/publisher-service-1.0.0.jar /app/publisher-service.jar
 
-# Seed data — baked into the image so the entrypoint can populate
-# the Railway Volume on first start without any manual upload step.
-# Only .csv files; Hadoop .crc sidecars are not read by the publisher.
-COPY publisher-service/data/shards_csv /app/shards-seed/shards_csv
-RUN find /app/shards-seed -name "*.crc" -delete
+# security_mapping.json is a few KB — bake it in as a fallback if the
+# volume copy is absent. The shards (1.1 GB) must be seeded into the
+# Railway Volume externally; see ARTIFACT_PATH env var.
+COPY publisher-service/data/security_mapping.json /app/security_mapping.json
 
-COPY publisher-service/data/security_mapping.json /app/shards-seed/security_mapping.json
-
-# Entrypoint
 COPY start-publisher.sh /app/start-publisher.sh
 RUN chmod +x /app/start-publisher.sh
 
